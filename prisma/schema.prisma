@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum AdminScope {
+  SCHOOL
+  SUPER
+}
+
+enum SubjectColor {
+  BLUE
+  TEAL
+  YELLOW
+  MINT
+  RED
+  PURPLE
+}
+
+enum AssignmentType {
+  ONLINE
+  UPLOAD_FILE
+  ESSAY
+}
+
+enum SubmissionKind {
+  FILE
+  ESSAY
+  ONLINE_ANSWERS
+}
+
+enum NotificationType {
+  ASSIGNMENT_NEW
+  ASSIGNMENT_GRADED
+  ASSIGNMENT_DUE_SOON
+  QUIZ_NEW
+  FORUM_REPLY
+  ANNOUNCEMENT
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  users      User[]
+  classes    Class[]
+  subjects   Subject[]
+  forumPosts ForumPost[]
+}
+
+model Class {
+  id        String @id @default(cuid())
+  schoolId  String
+  school    School @relation(fields: [schoolId], references: [id])
+  name      String
+  gradeYear Int
+
+  students      Student[]
+  classSubjects ClassSubject[]
+  scheduleSlots ScheduleSlot[]
+
+  @@unique([schoolId, name])
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  schoolId           String
+  school             School    @relation(fields: [schoolId], references: [id])
+  role               Role
+  email              String?   @unique
+  passwordHash       String
+  mustChangePassword Boolean   @default(true)
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastLoginAt        DateTime?
+
+  student       Student?
+  teacher       Teacher?
+  admin         Admin?
+  refreshTokens RefreshToken[]
+  forumPosts    ForumPost[]
+  forumReplies  ForumReply[]
+  forumLikes    ForumLike[]
+  forumSaves    ForumSave[]
+  notifications Notification[]
+
+  @@index([schoolId, role])
+}
+
+model Student {
+  userId  String  @id
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nis     String  @unique
+  name    String
+  classId String
+  class   Class   @relation(fields: [classId], references: [id])
+  level   Int     @default(1)
+  xp      Int     @default(0)
+  avatar  String?
+
+  chapterProgress ChapterProgress[]
+  submissions     AssignmentSubmission[]
+  quizSessions    QuizSession[]
+  badges          StudentBadge[]
+
+  @@index([classId])
+}
+
+model Teacher {
+  userId String  @id
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nip    String? @unique
+  name   String
+  title  String?
+  avatar String?
+
+  classSubjects ClassSubject[]
+}
+
+model Admin {
+  userId String     @id
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  scope  AdminScope @default(SCHOOL)
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Subject {
+  id        String       @id @default(cuid())
+  schoolId  String
+  school    School       @relation(fields: [schoolId], references: [id])
+  name      String
+  shortName String?
+  color     SubjectColor
+  iconKey   String
+  createdAt DateTime     @default(now())
+
+  chapters      Chapter[]
+  classOffers   ClassSubject[]
+  scheduleSlots ScheduleSlot[]
+  forumPosts    ForumPost[]
+
+  @@unique([schoolId, name])
+}
+
+model ClassSubject {
+  id        String  @id @default(cuid())
+  classId   String
+  class     Class   @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [userId])
+
+  assignments Assignment[]
+  quizzes     Quiz[]
+
+  @@unique([classId, subjectId])
+}
+
+model Chapter {
+  id        String  @id @default(cuid())
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  order     Int
+  title     String
+  content   String? @db.Text
+
+  progress ChapterProgress[]
+
+  @@unique([subjectId, order])
+}
+
+model ChapterProgress {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [userId])
+  chapterId   String
+  chapter     Chapter   @relation(fields: [chapterId], references: [id])
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+
+  @@unique([studentId, chapterId])
+}
+
+model ScheduleSlot {
+  id        String  @id @default(cuid())
+  classId   String
+  class     Class   @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  dayOfWeek Int
+  timeStart String
+  timeEnd   String
+  room      String
+
+  @@index([classId, dayOfWeek])
+}
+
+model Assignment {
+  id             String         @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject   @relation(fields: [classSubjectId], references: [id])
+  title          String
+  description    String         @db.Text
+  instructions   Json
+  type           AssignmentType
+  maxScore       Int            @default(100)
+  totalItems     String?
+  minWords       Int?
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentSize Int?
+  rubric         Json
+  dueAt          DateTime
+  createdById    String
+  createdAt      DateTime       @default(now())
+
+  submissions AssignmentSubmission[]
+
+  @@index([classSubjectId, dueAt])
+}
+
+model AssignmentSubmission {
+  id              String         @id @default(cuid())
+  assignmentId    String
+  assignment      Assignment     @relation(fields: [assignmentId], references: [id])
+  studentId       String
+  student         Student        @relation(fields: [studentId], references: [userId])
+  kind            SubmissionKind
+  fileUrl         String?
+  fileName        String?
+  fileSize        Int?
+  essayText       String?        @db.Text
+  answers         Json?
+  noteFromStudent String?        @db.Text
+  submittedAt     DateTime       @default(now())
+  score           Int?
+  feedback        String?        @db.Text
+  rubricBreakdown Json?
+  gradedAt        DateTime?
+  gradedById      String?
+
+  @@unique([assignmentId, studentId])
+}
+
+model Quiz {
+  id              String       @id @default(cuid())
+  classSubjectId  String
+  classSubject    ClassSubject @relation(fields: [classSubjectId], references: [id])
+  title           String
+  chapter         String
+  durationMinutes Int
+  totalQuestions  Int
+  createdAt       DateTime     @default(now())
+  createdById     String
+
+  questions QuizQuestion[]
+  sessions  QuizSession[]
+
+  @@index([classSubjectId])
+}
+
+model QuizQuestion {
+  id              String @id @default(cuid())
+  quizId          String
+  quiz            Quiz   @relation(fields: [quizId], references: [id])
+  order           Int
+  text            String @db.Text
+  options         Json
+  correctOptionId String
+  explanation     String @db.Text
+
+  @@unique([quizId, order])
+}
+
+model QuizSession {
+  id           String    @id @default(cuid())
+  quizId       String
+  quiz         Quiz      @relation(fields: [quizId], references: [id])
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [userId])
+  startedAt    DateTime  @default(now())
+  expiresAt    DateTime
+  submittedAt  DateTime?
+  answers      Json?
+  score        Int?
+  correctCount Int?
+  stars        Int?
+
+  @@index([studentId, quizId])
+}
+
+model ForumPost {
+  id        String   @id @default(cuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  classId   String?
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id])
+  content   String   @db.Text
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  replies ForumReply[]
+  likes   ForumLike[]
+  saves   ForumSave[]
+
+  @@index([schoolId, classId, createdAt])
+}
+
+model ForumReply {
+  id        String    @id @default(cuid())
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model ForumLike {
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@id([postId, userId])
+}
+
+model ForumSave {
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@id([postId, userId])
+}
+
+model Badge {
+  id          String @id
+  label       String
+  iconEmoji   String
+  description String?
+  criteria    String?
+
+  students StudentBadge[]
+}
+
+model StudentBadge {
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [userId])
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  earnedAt  DateTime @default(now())
+
+  @@id([studentId, badgeId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  body      String?
+  linkTo    String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
