@@ -196,7 +196,7 @@ model Chapter {
 model ChapterProgress {
   id          String    @id @default(cuid())
   studentId   String
-  student     Student   @relation(fields: [studentId], references: [userId])
+  student     Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   chapterId   String
   chapter     Chapter   @relation(fields: [chapterId], references: [id])
   completed   Boolean   @default(false)
@@ -248,7 +248,7 @@ model AssignmentSubmission {
   assignmentId    String
   assignment      Assignment     @relation(fields: [assignmentId], references: [id])
   studentId       String
-  student         Student        @relation(fields: [studentId], references: [userId])
+  student         Student        @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   kind            SubmissionKind
   fileUrl         String?
   fileName        String?
@@ -302,7 +302,7 @@ model QuizSession {
   quizId       String
   quiz         Quiz      @relation(fields: [quizId], references: [id])
   studentId    String
-  student      Student   @relation(fields: [studentId], references: [userId])
+  student      Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   startedAt    DateTime  @default(now())
   expiresAt    DateTime
   submittedAt  DateTime?
@@ -320,7 +320,7 @@ model ForumPost {
   school    School   @relation(fields: [schoolId], references: [id])
   classId   String?
   authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   subjectId String?
   subject   Subject? @relation(fields: [subjectId], references: [id])
   content   String   @db.Text
@@ -340,7 +340,7 @@ model ForumReply {
   postId    String
   post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId  String
-  author    User      @relation(fields: [authorId], references: [id])
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content   String    @db.Text
   createdAt DateTime  @default(now())
 
@@ -351,7 +351,7 @@ model ForumLike {
   postId    String
   post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
 
   @@id([postId, userId])
@@ -361,7 +361,7 @@ model ForumSave {
   postId    String
   post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
 
   @@id([postId, userId])
@@ -379,7 +379,7 @@ model Badge {
 
 model StudentBadge {
   studentId String
-  student   Student  @relation(fields: [studentId], references: [userId])
+  student   Student  @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   badgeId   String
   badge     Badge    @relation(fields: [badgeId], references: [id])
   earnedAt  DateTime @default(now())
@@ -390,7 +390,7 @@ model StudentBadge {
 model Notification {
   id        String           @id @default(cuid())
   userId    String
-  user      User             @relation(fields: [userId], references: [id])
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      NotificationType
   title     String
   body      String?
