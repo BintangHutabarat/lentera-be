@@ -82,6 +82,36 @@ export class SubjectsService {
     };
   }
 
+  async getChapterContent(userId: string, subjectId: string, chapterId: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Siswa tidak ditemukan' });
+
+    const classSubject = await this.prisma.classSubject.findFirst({
+      where: { classId: student.classId, subjectId },
+    });
+    if (!classSubject) {
+      throw new ForbiddenException({ code: 'SUBJECT_NOT_ACCESSIBLE', message: 'Mapel tidak tersedia untuk kelas Anda' });
+    }
+
+    const chapter = await this.prisma.chapter.findUnique({ where: { id: chapterId } });
+    if (!chapter || chapter.subjectId !== subjectId) {
+      throw new NotFoundException({ code: 'CHAPTER_NOT_FOUND', message: 'Bab tidak ditemukan' });
+    }
+
+    const progress = await this.prisma.chapterProgress.findUnique({
+      where: { studentId_chapterId: { studentId: userId, chapterId } },
+    });
+
+    return {
+      id: chapter.id,
+      order: chapter.order,
+      title: chapter.title,
+      content: chapter.content,
+      completed: progress?.completed ?? false,
+      completedAt: progress?.completedAt ?? null,
+    };
+  }
+
   async completeChapter(userId: string, chapterId: string) {
     const student = await this.prisma.student.findUnique({ where: { userId } });
     if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Siswa tidak ditemukan' });

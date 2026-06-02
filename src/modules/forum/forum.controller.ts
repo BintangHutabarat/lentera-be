@@ -89,4 +89,32 @@ export class ForumController {
   ) {
     return this.forumService.getSavedPosts(user.id, cursor, limit ? parseInt(limit) : 20);
   }
+
+  @Post('posts/:id/pin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  pinPost(@CurrentUser() user: { id: string; role: string }, @Param('id') id: string) {
+    return this.forumService.pinPost(user.id, id, user.role);
+  }
+
+  @Delete('posts/:id/pin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  unpinPost(@CurrentUser() user: { id: string; role: string }, @Param('id') id: string) {
+    return this.forumService.unpinPost(user.id, id, user.role);
+  }
+
+  @Delete('posts/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deletePost(@CurrentUser() user: { id: string; role: string }, @Param('id') id: string) {
+    return this.forumService.deletePost(user.id, id, user.role);
+  }
+
+  @Delete('posts/:id/replies/:replyId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteReply(
+    @CurrentUser() user: { id: string; role: string },
+    @Param('id') id: string,
+    @Param('replyId') replyId: string,
+  ) {
+    return this.forumService.deleteReply(user.id, id, replyId, user.role);
+  }
 }

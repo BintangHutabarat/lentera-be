@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -15,12 +16,15 @@ import { QuizzesModule } from './modules/quizzes/quizzes.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { StudentsModule } from './modules/students/students.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { TeacherModule } from './modules/teacher/teacher.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    NestScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     PrismaModule,
     AuthModule,
@@ -33,6 +37,8 @@ import { PrismaModule } from './prisma/prisma.module';
     LeaderboardModule,
     NotificationsModule,
     UploadsModule,
+    TeacherModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

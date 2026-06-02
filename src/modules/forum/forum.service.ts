@@ -229,6 +229,48 @@ export class ForumService {
     };
   }
 
+  async pinPost(userId: string, postId: string, role: string) {
+    if (role !== 'TEACHER' && role !== 'ADMIN') {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Hanya guru atau admin yang bisa menyematkan post' });
+    }
+    const post = await this.prisma.forumPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException({ code: 'POST_NOT_FOUND', message: 'Post tidak ditemukan' });
+    await this.prisma.forumPost.update({ where: { id: postId }, data: { isPinned: true } });
+  }
+
+  async unpinPost(userId: string, postId: string, role: string) {
+    if (role !== 'TEACHER' && role !== 'ADMIN') {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Hanya guru atau admin yang bisa melepas sematan' });
+    }
+    const post = await this.prisma.forumPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException({ code: 'POST_NOT_FOUND', message: 'Post tidak ditemukan' });
+    await this.prisma.forumPost.update({ where: { id: postId }, data: { isPinned: false } });
+  }
+
+  async deletePost(userId: string, postId: string, role: string) {
+    const post = await this.prisma.forumPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException({ code: 'POST_NOT_FOUND', message: 'Post tidak ditemukan' });
+    const isOwner = post.authorId === userId;
+    const isModerator = role === 'TEACHER' || role === 'ADMIN';
+    if (!isOwner && !isModerator) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    await this.prisma.forumPost.delete({ where: { id: postId } });
+  }
+
+  async deleteReply(userId: string, postId: string, replyId: string, role: string) {
+    const reply = await this.prisma.forumReply.findUnique({ where: { id: replyId } });
+    if (!reply || reply.postId !== postId) {
+      throw new NotFoundException({ code: 'REPLY_NOT_FOUND', message: 'Balasan tidak ditemukan' });
+    }
+    const isOwner = reply.authorId === userId;
+    const isModerator = role === 'TEACHER' || role === 'ADMIN';
+    if (!isOwner && !isModerator) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    await this.prisma.forumReply.delete({ where: { id: replyId } });
+  }
+
   private formatAuthor(user: any) {
     const name: string = user.student?.name ?? user.teacher?.name ?? user.admin?.name ?? 'Unknown';
     return {

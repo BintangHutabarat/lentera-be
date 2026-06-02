@@ -24,6 +24,16 @@ export class SubjectsController {
   }
 
   @Roles(Role.STUDENT)
+  @Get(':subjectId/chapters/:chapterId')
+  getChapterContent(
+    @CurrentUser() user: { id: string },
+    @Param('subjectId') subjectId: string,
+    @Param('chapterId') chapterId: string,
+  ) {
+    return this.subjectsService.getChapterContent(user.id, subjectId, chapterId);
+  }
+
+  @Roles(Role.STUDENT)
   @Post('chapters/:chapterId/complete')
   @HttpCode(HttpStatus.NO_CONTENT)
   completeChapter(@CurrentUser() user: { id: string }, @Param('chapterId') chapterId: string) {

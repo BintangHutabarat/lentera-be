@@ -1,9 +1,16 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+import { IsString, IsUrl } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { StudentsService } from './students.service';
+
+class UpdateAvatarDto {
+  @IsString()
+  @IsUrl()
+  avatarUrl: string;
+}
 
 @ApiTags('students')
 @ApiBearerAuth()
@@ -27,5 +34,12 @@ export class StudentsController {
   @Get('me/badges')
   getBadges(@CurrentUser() user: { id: string }) {
     return this.studentsService.getBadges(user.id);
+  }
+
+  @Roles(Role.STUDENT)
+  @Patch('me/avatar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  updateAvatar(@CurrentUser() user: { id: string }, @Body() dto: UpdateAvatarDto) {
+    return this.studentsService.updateAvatar(user.id, dto.avatarUrl);
   }
 }

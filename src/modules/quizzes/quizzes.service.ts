@@ -84,6 +84,13 @@ export class QuizzesService {
       await this.finalizeSession(existing, quiz.questions);
     }
 
+    const submittedCount = await this.prisma.quizSession.count({
+      where: { quizId, studentId: userId, submittedAt: { not: null } },
+    });
+    if (submittedCount >= ((quiz as any).maxAttempts ?? 1)) {
+      throw new ForbiddenException({ code: 'MAX_ATTEMPTS_REACHED', message: 'Batas percobaan quiz telah tercapai' });
+    }
+
     const expiresAt = new Date(now.getTime() + quiz.durationMinutes * 60 * 1000);
     const session = await this.prisma.quizSession.create({
       data: { quizId, studentId: userId, expiresAt },

@@ -274,6 +274,7 @@ model Quiz {
   chapter         String
   durationMinutes Int
   totalQuestions  Int
+  maxAttempts     Int          @default(1)
   createdAt       DateTime     @default(now())
   createdById     String
 

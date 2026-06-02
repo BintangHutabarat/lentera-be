@@ -72,6 +72,12 @@ export class StudentsService {
     }));
   }
 
+  async updateAvatar(userId: string, avatarUrl: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
+    await this.prisma.student.update({ where: { userId }, data: { avatar: avatarUrl } });
+  }
+
   private xpMax(level: number) {
     return 1000 + level * 100;
   }
