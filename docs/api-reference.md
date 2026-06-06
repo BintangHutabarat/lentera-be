@@ -1746,6 +1746,8 @@ Reset password user. Password baru dikembalikan ke admin.
 
 Hapus user beserta semua datanya (cascade). Tidak bisa hapus akun sendiri.
 
+Khusus guru: penghapusan **diblokir** jika masih punya penugasan kelas-mapel aktif. Admin harus hapus semua tugas & quiz guru terlebih dahulu via `DELETE /admin/assignments/:id` dan `DELETE /admin/quizzes/:id`, lalu hapus penugasannya via `DELETE /admin/class-subjects/:id`, baru kemudian hapus akunnya.
+
 **Response 204** — Tidak ada body.
 
 **Error Codes**
@@ -1753,6 +1755,7 @@ Hapus user beserta semua datanya (cascade). Tidak bisa hapus akun sendiri.
 |------|--------|------------|
 | `CANNOT_DELETE_SELF` | 403 | Tidak bisa menghapus akun sendiri |
 | `USER_NOT_FOUND` | 404 | User tidak ditemukan |
+| `TEACHER_HAS_CLASS_SUBJECTS` | 409 | Guru masih mengajar N mata pelajaran |
 
 ---
 
@@ -1772,6 +1775,56 @@ Daftar semua kelas di sekolah ini.
   }
 ]
 ```
+
+---
+
+### GET `/admin/classes/:id`
+
+Detail kelas beserta daftar siswa dan kelas-mapel (penugasan guru).
+
+**Response 200**
+```json
+{
+  "id": "clx...",
+  "name": "XII IPA 1",
+  "gradeYear": 12,
+  "students": [
+    {
+      "id": "clx...",
+      "name": "Rizky Aditya",
+      "nis": "12345678",
+      "email": "rizky@gmail.com",
+      "isActive": true,
+      "level": 3,
+      "xp": 1240
+    }
+  ],
+  "classSubjects": [
+    {
+      "id": "clx...",
+      "subject": {
+        "id": "clx...",
+        "name": "Matematika",
+        "shortName": "MTK",
+        "color": "blue",
+        "iconKey": "math"
+      },
+      "teacher": {
+        "userId": "clx...",
+        "name": "Pak Ahmad Fauzi",
+        "title": "S.Pd."
+      },
+      "assignmentCount": 5,
+      "quizCount": 3
+    }
+  ]
+}
+```
+
+**Error Codes**
+| Code | Status | Keterangan |
+|------|--------|------------|
+| `CLASS_NOT_FOUND` | 404 | Kelas tidak ditemukan |
 
 ---
 
@@ -1956,7 +2009,91 @@ Hapus penugasan. Gagal jika sudah ada tugas atau quiz.
 **Error Codes**
 | Code | Status | Keterangan |
 |------|--------|------------|
+| `CLASS_SUBJECT_NOT_FOUND` | 404 | Kelas-mapel tidak ditemukan |
 | `CLASS_SUBJECT_IN_USE` | 409 | Masih ada tugas atau quiz di dalamnya |
+
+---
+
+### GET `/admin/class-subjects/:id/assignments`
+
+Daftar semua tugas dalam satu kelas-mapel.
+
+**Response 200**
+```json
+[
+  {
+    "id": "clx...",
+    "title": "Latihan Soal Turunan",
+    "type": "UPLOAD_FILE",
+    "dueAt": "2025-06-10T16:00:00.000Z",
+    "maxScore": 100,
+    "submissionCount": 12,
+    "createdAt": "2025-06-01T08:00:00.000Z"
+  }
+]
+```
+
+> Diurutkan dari `dueAt` terbaru ke terlama.
+
+**Error Codes**
+| Code | Status | Keterangan |
+|------|--------|------------|
+| `CLASS_SUBJECT_NOT_FOUND` | 404 | Kelas-mapel tidak ditemukan |
+
+---
+
+### DELETE `/admin/assignments/:id`
+
+Hapus tugas beserta seluruh pengumpulan siswa (cascade). Digunakan admin untuk membersihkan data sebelum menghapus penugasan guru atau akun guru.
+
+**Response 204** — Tidak ada body.
+
+**Error Codes**
+| Code | Status | Keterangan |
+|------|--------|------------|
+| `ASSIGNMENT_NOT_FOUND` | 404 | Tugas tidak ditemukan |
+
+---
+
+### GET `/admin/class-subjects/:id/quizzes`
+
+Daftar semua quiz dalam satu kelas-mapel.
+
+**Response 200**
+```json
+[
+  {
+    "id": "clx...",
+    "title": "Quiz Bab 3 — Turunan",
+    "chapter": "Bab 3",
+    "durationMinutes": 30,
+    "totalQuestions": 10,
+    "maxAttempts": 1,
+    "sessionCount": 25,
+    "createdAt": "2025-06-01T08:00:00.000Z"
+  }
+]
+```
+
+> Diurutkan dari yang paling baru dibuat.
+
+**Error Codes**
+| Code | Status | Keterangan |
+|------|--------|------------|
+| `CLASS_SUBJECT_NOT_FOUND` | 404 | Kelas-mapel tidak ditemukan |
+
+---
+
+### DELETE `/admin/quizzes/:id`
+
+Hapus quiz beserta seluruh soal dan sesi pengerjaan siswa (cascade). Digunakan admin untuk membersihkan data sebelum menghapus penugasan guru atau akun guru.
+
+**Response 204** — Tidak ada body.
+
+**Error Codes**
+| Code | Status | Keterangan |
+|------|--------|------------|
+| `QUIZ_NOT_FOUND` | 404 | Quiz tidak ditemukan |
 
 ---
 

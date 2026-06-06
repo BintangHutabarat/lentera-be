@@ -183,7 +183,7 @@ model ClassSubject {
 model Chapter {
   id        String  @id @default(cuid())
   subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   order     Int
   title     String
   content   String? @db.Text
@@ -198,7 +198,7 @@ model ChapterProgress {
   studentId   String
   student     Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   chapterId   String
-  chapter     Chapter   @relation(fields: [chapterId], references: [id])
+  chapter     Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   completed   Boolean   @default(false)
   completedAt DateTime?
 
@@ -208,9 +208,9 @@ model ChapterProgress {
 model ScheduleSlot {
   id        String  @id @default(cuid())
   classId   String
-  class     Class   @relation(fields: [classId], references: [id])
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
   subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   dayOfWeek Int
   timeStart String
   timeEnd   String
@@ -246,7 +246,7 @@ model Assignment {
 model AssignmentSubmission {
   id              String         @id @default(cuid())
   assignmentId    String
-  assignment      Assignment     @relation(fields: [assignmentId], references: [id])
+  assignment      Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   studentId       String
   student         Student        @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   kind            SubmissionKind
@@ -287,7 +287,7 @@ model Quiz {
 model QuizQuestion {
   id              String @id @default(cuid())
   quizId          String
-  quiz            Quiz   @relation(fields: [quizId], references: [id])
+  quiz            Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
   order           Int
   text            String @db.Text
   options         Json
@@ -300,7 +300,7 @@ model QuizQuestion {
 model QuizSession {
   id           String    @id @default(cuid())
   quizId       String
-  quiz         Quiz      @relation(fields: [quizId], references: [id])
+  quiz         Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
   studentId    String
   student      Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   startedAt    DateTime  @default(now())

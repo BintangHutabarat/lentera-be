@@ -295,6 +295,18 @@ export class AdminService {
       throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User tidak ditemukan' });
     }
 
+    if (user.role === 'TEACHER') {
+      const classSubjectCount = await this.prisma.classSubject.count({
+        where: { teacher: { userId: targetId } },
+      });
+      if (classSubjectCount > 0) {
+        throw new ConflictException({
+          code: 'TEACHER_HAS_CLASS_SUBJECTS',
+          message: `Guru masih mengajar ${classSubjectCount} mata pelajaran. Hapus atau pindahkan terlebih dahulu sebelum menghapus guru.`,
+        });
+      }
+    }
+
     await this.prisma.user.delete({ where: { id: targetId } });
   }
 
@@ -343,13 +355,16 @@ export class AdminService {
     const admin = await this.getAdmin(userId);
     const cls = await this.prisma.class.findUnique({
       where: { id: classId },
-      include: { _count: { select: { students: true } } },
+      include: { _count: { select: { students: true, classSubjects: true } } },
     });
     if (!cls || cls.schoolId !== admin.user.schoolId) {
       throw new NotFoundException({ code: 'CLASS_NOT_FOUND', message: 'Kelas tidak ditemukan' });
     }
     if (cls._count.students > 0) {
       throw new ConflictException({ code: 'CLASS_HAS_STUDENTS', message: 'Kelas masih memiliki siswa' });
+    }
+    if (cls._count.classSubjects > 0) {
+      throw new ConflictException({ code: 'CLASS_HAS_CLASS_SUBJECTS', message: `Kelas masih memiliki ${cls._count.classSubjects} mata pelajaran. Hapus semua mata pelajaran kelas terlebih dahulu.` });
     }
     await this.prisma.class.delete({ where: { id: classId } });
   }
@@ -631,5 +646,139 @@ export class AdminService {
       throw new NotFoundException({ code: 'CHAPTER_NOT_FOUND', message: 'Bab tidak ditemukan' });
     }
     await this.prisma.chapter.delete({ where: { id: chapterId } });
+  }
+
+  // ── Class Detail ───────────────────────────────────────────────────────────
+
+  async getClassDetail(userId: string, classId: string) {
+    const admin = await this.getAdmin(userId);
+    const cls = await this.prisma.class.findUnique({
+      where: { id: classId },
+      include: {
+        students: {
+          include: { user: { select: { isActive: true, email: true } } },
+          orderBy: { name: 'asc' },
+        },
+        classSubjects: {
+          include: {
+            subject: { select: { id: true, name: true, shortName: true, color: true, iconKey: true } },
+            teacher: { select: { userId: true, name: true, title: true } },
+            _count: { select: { assignments: true, quizzes: true } },
+          },
+        },
+      },
+    });
+    if (!cls || cls.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({ code: 'CLASS_NOT_FOUND', message: 'Kelas tidak ditemukan' });
+    }
+
+    return {
+      id: cls.id,
+      name: cls.name,
+      gradeYear: cls.gradeYear,
+      students: cls.students.map(s => ({
+        id: s.userId,
+        name: s.name,
+        nis: s.nis,
+        email: s.user.email,
+        isActive: s.user.isActive,
+        level: s.level,
+        xp: s.xp,
+      })),
+      classSubjects: cls.classSubjects.map(cs => ({
+        id: cs.id,
+        subject: { ...cs.subject, color: cs.subject.color.toLowerCase() },
+        teacher: cs.teacher,
+        assignmentCount: cs._count.assignments,
+        quizCount: cs._count.quizzes,
+      })),
+    };
+  }
+
+  // ── Assignments (admin) ────────────────────────────────────────────────────
+
+  async getClassSubjectAssignments(userId: string, csId: string) {
+    const admin = await this.getAdmin(userId);
+    const cs = await this.prisma.classSubject.findUnique({
+      where: { id: csId },
+      include: { class: true },
+    });
+    if (!cs || cs.class.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({ code: 'CLASS_SUBJECT_NOT_FOUND', message: 'Kelas-mapel tidak ditemukan' });
+    }
+
+    const assignments = await this.prisma.assignment.findMany({
+      where: { classSubjectId: csId },
+      include: { _count: { select: { submissions: true } } },
+      orderBy: { dueAt: 'desc' },
+    });
+
+    return assignments.map(a => ({
+      id: a.id,
+      title: a.title,
+      type: a.type,
+      dueAt: a.dueAt,
+      maxScore: a.maxScore,
+      submissionCount: a._count.submissions,
+      createdAt: a.createdAt,
+    }));
+  }
+
+  async deleteAssignment(userId: string, assignmentId: string) {
+    const admin = await this.getAdmin(userId);
+    const assignment = await this.prisma.assignment.findFirst({
+      where: {
+        id: assignmentId,
+        classSubject: { class: { schoolId: admin.user.schoolId } },
+      },
+    });
+    if (!assignment) {
+      throw new NotFoundException({ code: 'ASSIGNMENT_NOT_FOUND', message: 'Tugas tidak ditemukan' });
+    }
+    await this.prisma.assignment.delete({ where: { id: assignmentId } });
+  }
+
+  // ── Quizzes (admin) ────────────────────────────────────────────────────────
+
+  async getClassSubjectQuizzes(userId: string, csId: string) {
+    const admin = await this.getAdmin(userId);
+    const cs = await this.prisma.classSubject.findUnique({
+      where: { id: csId },
+      include: { class: true },
+    });
+    if (!cs || cs.class.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({ code: 'CLASS_SUBJECT_NOT_FOUND', message: 'Kelas-mapel tidak ditemukan' });
+    }
+
+    const quizzes = await this.prisma.quiz.findMany({
+      where: { classSubjectId: csId },
+      include: { _count: { select: { sessions: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return quizzes.map(q => ({
+      id: q.id,
+      title: q.title,
+      chapter: q.chapter,
+      durationMinutes: q.durationMinutes,
+      totalQuestions: q.totalQuestions,
+      maxAttempts: q.maxAttempts,
+      sessionCount: q._count.sessions,
+      createdAt: q.createdAt,
+    }));
+  }
+
+  async deleteQuiz(userId: string, quizId: string) {
+    const admin = await this.getAdmin(userId);
+    const quiz = await this.prisma.quiz.findFirst({
+      where: {
+        id: quizId,
+        classSubject: { class: { schoolId: admin.user.schoolId } },
+      },
+    });
+    if (!quiz) {
+      throw new NotFoundException({ code: 'QUIZ_NOT_FOUND', message: 'Quiz tidak ditemukan' });
+    }
+    await this.prisma.quiz.delete({ where: { id: quizId } });
   }
 }

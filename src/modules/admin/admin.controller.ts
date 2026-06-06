@@ -117,6 +117,11 @@ export class AdminController {
     return this.adminService.getClasses(user.id);
   }
 
+  @Get('classes/:id')
+  getClassDetail(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.adminService.getClassDetail(user.id, id);
+  }
+
   @Post('classes')
   @HttpCode(HttpStatus.CREATED)
   createClass(@CurrentUser() user: { id: string }, @Body() dto: CreateClassDto) {
@@ -199,6 +204,28 @@ export class AdminController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteClassSubject(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.adminService.deleteClassSubject(user.id, id);
+  }
+
+  @Get('class-subjects/:id/assignments')
+  getClassSubjectAssignments(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.adminService.getClassSubjectAssignments(user.id, id);
+  }
+
+  @Delete('assignments/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteAssignment(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.adminService.deleteAssignment(user.id, id);
+  }
+
+  @Get('class-subjects/:id/quizzes')
+  getClassSubjectQuizzes(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.adminService.getClassSubjectQuizzes(user.id, id);
+  }
+
+  @Delete('quizzes/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteQuiz(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.adminService.deleteQuiz(user.id, id);
   }
 
   // ── Schedule ───────────────────────────────────────────────────────────────
