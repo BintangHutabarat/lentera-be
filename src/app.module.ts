@@ -17,6 +17,7 @@ import { ScheduleModule } from './modules/schedule/schedule.module';
 import { StudentsModule } from './modules/students/students.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { PrincipalModule } from './modules/principal/principal.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -39,6 +40,7 @@ import { PrismaModule } from './prisma/prisma.module';
     UploadsModule,
     TeacherModule,
     AdminModule,
+    PrincipalModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

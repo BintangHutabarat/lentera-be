@@ -10,6 +10,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAcademicYearDto } from './dto/create-academic-year.dto';
 import { CreateChapterDto } from './dto/create-chapter.dto';
+import { CreatePrincipalDto } from './dto/create-principal.dto';
 import { CreateClassDto } from './dto/create-class.dto';
 import { CreateClassSubjectDto } from './dto/create-class-subject.dto';
 import { CreateScheduleSlotDto } from './dto/create-schedule-slot.dto';
@@ -135,6 +136,30 @@ export class AdminService {
     });
 
     return { id: user.id, nis: dto.nis, name: dto.name, temporaryPassword: plainPassword };
+  }
+
+  async createPrincipal(userId: string, dto: CreatePrincipalDto) {
+    const admin = await this.getAdmin(userId);
+    const schoolId = admin.user.schoolId;
+
+    const emailTaken = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (emailTaken) throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'Email sudah digunakan' });
+
+    const plainPassword = dto.password ?? this.generatePassword();
+    const passwordHash = await argon2.hash(plainPassword);
+
+    const user = await this.prisma.user.create({
+      data: {
+        schoolId,
+        role: Role.PRINCIPAL,
+        email: dto.email,
+        passwordHash,
+        mustChangePassword: true,
+        principal: { create: { name: dto.name } },
+      },
+    });
+
+    return { id: user.id, email: dto.email, name: dto.name, temporaryPassword: plainPassword };
   }
 
   async createTeacher(userId: string, dto: CreateTeacherDto) {

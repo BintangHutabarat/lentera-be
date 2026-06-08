@@ -17,6 +17,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AdminService } from './admin.service';
 import { CreateAcademicYearDto } from './dto/create-academic-year.dto';
 import { CreateChapterDto } from './dto/create-chapter.dto';
+import { CreatePrincipalDto } from './dto/create-principal.dto';
 import { CreateClassDto } from './dto/create-class.dto';
 import { CreateClassSubjectDto } from './dto/create-class-subject.dto';
 import { CreateScheduleSlotDto } from './dto/create-schedule-slot.dto';
@@ -69,6 +70,12 @@ export class AdminController {
   @HttpCode(HttpStatus.CREATED)
   createTeacher(@CurrentUser() user: { id: string }, @Body() dto: CreateTeacherDto) {
     return this.adminService.createTeacher(user.id, dto);
+  }
+
+  @Post('users/principals')
+  @HttpCode(HttpStatus.CREATED)
+  createPrincipal(@CurrentUser() user: { id: string }, @Body() dto: CreatePrincipalDto) {
+    return this.adminService.createPrincipal(user.id, dto);
   }
 
   @Get('users/:id')
