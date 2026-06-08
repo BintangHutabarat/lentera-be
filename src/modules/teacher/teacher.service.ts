@@ -8,11 +8,14 @@ import {
 import { MeetingStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
+import { CreateExamDto } from './dto/create-exam.dto';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { UpdateExamDto } from './dto/update-exam.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
+import { UpsertExamGradesDto } from './dto/upsert-exam-grades.dto';
 
 @Injectable()
 export class TeacherService {
@@ -772,6 +775,148 @@ export class TeacherService {
         this.prisma.attendance.update({
           where: { meetingId_studentId: { meetingId, studentId: e.studentId } },
           data: { status: e.status },
+        }),
+      ),
+    );
+  }
+
+  // ── Exams ──────────────────────────────────────────────────────────────────
+
+  private async assertOwnsExam(teacherId: string, examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      include: { classSubject: true },
+    });
+    if (!exam) throw new NotFoundException({ code: 'EXAM_NOT_FOUND', message: 'Ujian tidak ditemukan' });
+    if (exam.classSubject.teacherId !== teacherId) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    return exam;
+  }
+
+  async getExams(userId: string, classSubjectId: string) {
+    const teacher = await this.getTeacher(userId);
+    await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+    const exams = await this.prisma.exam.findMany({
+      where: { classSubjectId },
+      orderBy: { date: 'desc' },
+      include: { _count: { select: { grades: true } } },
+    });
+    return exams.map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      maxScore: e.maxScore,
+      date: e.date,
+      gradedCount: e._count.grades,
+      createdAt: e.createdAt,
+    }));
+  }
+
+  async createExam(userId: string, classSubjectId: string, dto: CreateExamDto) {
+    const teacher = await this.getTeacher(userId);
+    await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+    const exam = await this.prisma.exam.create({
+      data: {
+        classSubjectId,
+        title: dto.title,
+        description: dto.description,
+        maxScore: dto.maxScore ?? 100,
+        date: dto.date ? new Date(dto.date) : null,
+        createdById: teacher.userId,
+      },
+    });
+    return { id: exam.id };
+  }
+
+  async updateExam(userId: string, examId: string, dto: UpdateExamDto) {
+    const teacher = await this.getTeacher(userId);
+    await this.assertOwnsExam(teacher.userId, examId);
+    await this.prisma.exam.update({
+      where: { id: examId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.maxScore !== undefined && { maxScore: dto.maxScore }),
+        ...(dto.date !== undefined && { date: dto.date ? new Date(dto.date) : null }),
+      },
+    });
+  }
+
+  async deleteExam(userId: string, examId: string) {
+    const teacher = await this.getTeacher(userId);
+    await this.assertOwnsExam(teacher.userId, examId);
+    await this.prisma.exam.delete({ where: { id: examId } });
+  }
+
+  async getExamGrades(userId: string, examId: string) {
+    const teacher = await this.getTeacher(userId);
+    const exam = await this.assertOwnsExam(teacher.userId, examId);
+
+    const [students, grades] = await Promise.all([
+      this.prisma.student.findMany({
+        where: { classId: exam.classSubject.classId },
+        select: { userId: true, name: true, nis: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.examGrade.findMany({ where: { examId } }),
+    ]);
+
+    const gradeMap = new Map(grades.map((g) => [g.studentId, g]));
+
+    return {
+      exam: {
+        id: exam.id,
+        title: exam.title,
+        maxScore: exam.maxScore,
+        date: exam.date,
+      },
+      entries: students.map((s) => {
+        const g = gradeMap.get(s.userId);
+        return {
+          studentId: s.userId,
+          name: s.name,
+          nis: s.nis,
+          score: g?.score ?? null,
+          notes: g?.notes ?? null,
+          gradedAt: g?.gradedAt ?? null,
+        };
+      }),
+    };
+  }
+
+  async upsertExamGrades(userId: string, examId: string, dto: UpsertExamGradesDto) {
+    const teacher = await this.getTeacher(userId);
+    const exam = await this.assertOwnsExam(teacher.userId, examId);
+
+    for (const entry of dto.entries) {
+      if (entry.score !== null && entry.score !== undefined && entry.score > exam.maxScore) {
+        throw new BadRequestException({
+          code: 'SCORE_EXCEEDS_MAX',
+          message: `Nilai tidak boleh melebihi ${exam.maxScore}`,
+        });
+      }
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(
+      dto.entries.map((e) =>
+        this.prisma.examGrade.upsert({
+          where: { examId_studentId: { examId, studentId: e.studentId } },
+          create: {
+            examId,
+            studentId: e.studentId,
+            score: e.score ?? null,
+            notes: e.notes ?? null,
+            gradedAt: e.score !== null && e.score !== undefined ? now : null,
+            gradedById: e.score !== null && e.score !== undefined ? teacher.userId : null,
+          },
+          update: {
+            score: e.score ?? null,
+            notes: e.notes ?? null,
+            gradedAt: e.score !== null && e.score !== undefined ? now : null,
+            gradedById: e.score !== null && e.score !== undefined ? teacher.userId : null,
+          },
         }),
       ),
     );

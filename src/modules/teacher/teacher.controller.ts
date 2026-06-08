@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -18,11 +19,14 @@ import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
+import { CreateExamDto } from './dto/create-exam.dto';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { UpdateExamDto } from './dto/update-exam.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
+import { UpsertExamGradesDto } from './dto/upsert-exam-grades.dto';
 import { TeacherService } from './teacher.service';
 import { ExportService } from './export.service';
 
@@ -265,5 +269,53 @@ export class TeacherController {
     @Body() dto: UpdateAttendanceDto,
   ) {
     return this.teacherService.updateAttendance(user.id, id, dto);
+  }
+
+  // ── Exams ──────────────────────────────────────────────────────────────────
+
+  @Get('class-subjects/:id/exams')
+  getExams(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.getExams(user.id, id);
+  }
+
+  @Post('class-subjects/:id/exams')
+  @HttpCode(HttpStatus.CREATED)
+  createExam(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: CreateExamDto,
+  ) {
+    return this.teacherService.createExam(user.id, id, dto);
+  }
+
+  @Patch('exams/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  updateExam(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateExamDto,
+  ) {
+    return this.teacherService.updateExam(user.id, id, dto);
+  }
+
+  @Delete('exams/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteExam(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.deleteExam(user.id, id);
+  }
+
+  @Get('exams/:id/grades')
+  getExamGrades(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.getExamGrades(user.id, id);
+  }
+
+  @Put('exams/:id/grades')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  upsertExamGrades(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpsertExamGradesDto,
+  ) {
+    return this.teacherService.upsertExamGrades(user.id, id, dto);
   }
 }
