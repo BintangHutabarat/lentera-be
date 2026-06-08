@@ -8,6 +8,7 @@ import {
 import { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateAcademicYearDto } from './dto/create-academic-year.dto';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { CreateClassDto } from './dto/create-class.dto';
 import { CreateClassSubjectDto } from './dto/create-class-subject.dto';
@@ -474,7 +475,12 @@ export class AdminService {
     if (existing) throw new ConflictException({ code: 'CLASS_SUBJECT_EXISTS', message: 'Mapel sudah ditugaskan di kelas ini' });
 
     const cs = await this.prisma.classSubject.create({
-      data: { classId: dto.classId, subjectId: dto.subjectId, teacherId: dto.teacherId },
+      data: {
+        classId: dto.classId,
+        subjectId: dto.subjectId,
+        teacherId: dto.teacherId,
+        ...(dto.totalMeetings !== undefined && { totalMeetings: dto.totalMeetings }),
+      },
     });
     return { id: cs.id };
   }
@@ -488,14 +494,22 @@ export class AdminService {
     if (!cs || cs.class.schoolId !== admin.user.schoolId) {
       throw new NotFoundException({ code: 'CLASS_SUBJECT_NOT_FOUND', message: 'Kelas-mapel tidak ditemukan' });
     }
-    const teacher = await this.prisma.teacher.findUnique({
-      where: { userId: dto.teacherId },
-      include: { user: true },
-    });
-    if (!teacher || teacher.user.schoolId !== admin.user.schoolId) {
-      throw new NotFoundException({ code: 'TEACHER_NOT_FOUND', message: 'Guru tidak ditemukan' });
+    if (dto.teacherId) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId: dto.teacherId },
+        include: { user: true },
+      });
+      if (!teacher || teacher.user.schoolId !== admin.user.schoolId) {
+        throw new NotFoundException({ code: 'TEACHER_NOT_FOUND', message: 'Guru tidak ditemukan' });
+      }
     }
-    await this.prisma.classSubject.update({ where: { id: csId }, data: { teacherId: dto.teacherId } });
+    await this.prisma.classSubject.update({
+      where: { id: csId },
+      data: {
+        ...(dto.teacherId && { teacherId: dto.teacherId }),
+        ...(dto.totalMeetings !== undefined && { totalMeetings: dto.totalMeetings }),
+      },
+    });
   }
 
   async deleteClassSubject(userId: string, csId: string) {
@@ -780,5 +794,75 @@ export class AdminService {
       throw new NotFoundException({ code: 'QUIZ_NOT_FOUND', message: 'Quiz tidak ditemukan' });
     }
     await this.prisma.quiz.delete({ where: { id: quizId } });
+  }
+
+  // ── Academic Years ─────────────────────────────────────────────────────────
+
+  async getAcademicYears(userId: string) {
+    const admin = await this.getAdmin(userId);
+    const years = await this.prisma.academicYear.findMany({
+      where: { schoolId: admin.user.schoolId },
+      orderBy: { label: 'desc' },
+    });
+    return years.map((y) => ({ id: y.id, label: y.label, isActive: y.isActive }));
+  }
+
+  async createAcademicYear(userId: string, dto: CreateAcademicYearDto) {
+    const admin = await this.getAdmin(userId);
+    const existing = await this.prisma.academicYear.findUnique({
+      where: { schoolId_label: { schoolId: admin.user.schoolId, label: dto.label } },
+    });
+    if (existing) {
+      throw new ConflictException({
+        code: 'ACADEMIC_YEAR_EXISTS',
+        message: 'Tahun ajaran sudah ada',
+      });
+    }
+    const year = await this.prisma.academicYear.create({
+      data: { schoolId: admin.user.schoolId, label: dto.label },
+    });
+    return { id: year.id, label: year.label, isActive: year.isActive };
+  }
+
+  async activateAcademicYear(userId: string, yearId: string) {
+    const admin = await this.getAdmin(userId);
+    const year = await this.prisma.academicYear.findUnique({ where: { id: yearId } });
+    if (!year || year.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({
+        code: 'ACADEMIC_YEAR_NOT_FOUND',
+        message: 'Tahun ajaran tidak ditemukan',
+      });
+    }
+    await this.prisma.$transaction([
+      this.prisma.academicYear.updateMany({
+        where: { schoolId: admin.user.schoolId, isActive: true },
+        data: { isActive: false },
+      }),
+      this.prisma.academicYear.update({
+        where: { id: yearId },
+        data: { isActive: true },
+      }),
+    ]);
+  }
+
+  async deleteAcademicYear(userId: string, yearId: string) {
+    const admin = await this.getAdmin(userId);
+    const year = await this.prisma.academicYear.findUnique({
+      where: { id: yearId },
+      include: { _count: { select: { finalGrades: true } } },
+    });
+    if (!year || year.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({
+        code: 'ACADEMIC_YEAR_NOT_FOUND',
+        message: 'Tahun ajaran tidak ditemukan',
+      });
+    }
+    if (year._count.finalGrades > 0) {
+      throw new ConflictException({
+        code: 'ACADEMIC_YEAR_IN_USE',
+        message: 'Tahun ajaran sudah memiliki nilai akhir',
+      });
+    }
+    await this.prisma.academicYear.delete({ where: { id: yearId } });
   }
 }

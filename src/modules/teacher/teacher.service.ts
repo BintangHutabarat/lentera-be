@@ -5,12 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { MeetingStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 
 @Injectable()
@@ -620,5 +621,159 @@ export class TeacherService {
         submittedAt: session?.submittedAt ?? null,
       };
     });
+  }
+
+  // ── Meetings & Attendance ──────────────────────────────────────────────────
+
+  async getMeetings(userId: string, classSubjectId: string) {
+    const teacher = await this.getTeacher(userId);
+    const cs = await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+    const meetings = await this.prisma.meeting.findMany({
+      where: { classSubjectId },
+      orderBy: { meetingNumber: 'asc' },
+      include: { _count: { select: { attendances: true } } },
+    });
+    return {
+      totalMeetings: cs.totalMeetings,
+      meetings: meetings.map((m) => ({
+        id: m.id,
+        meetingNumber: m.meetingNumber,
+        status: m.status,
+        startedAt: m.startedAt,
+        endedAt: m.endedAt,
+        studentCount: m._count.attendances,
+      })),
+    };
+  }
+
+  async openMeeting(userId: string, classSubjectId: string) {
+    const teacher = await this.getTeacher(userId);
+    const cs = await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+
+    const openMeeting = await this.prisma.meeting.findFirst({
+      where: { classSubjectId, status: MeetingStatus.OPEN },
+    });
+    if (openMeeting) {
+      throw new ConflictException({
+        code: 'MEETING_ALREADY_OPEN',
+        message: 'Masih ada pertemuan yang belum ditutup',
+      });
+    }
+
+    const last = await this.prisma.meeting.findFirst({
+      where: { classSubjectId },
+      orderBy: { meetingNumber: 'desc' },
+    });
+    const nextNumber = (last?.meetingNumber ?? 0) + 1;
+    if (nextNumber > cs.totalMeetings) {
+      throw new ConflictException({
+        code: 'MEETING_LIMIT_REACHED',
+        message: `Jumlah pertemuan sudah mencapai batas (${cs.totalMeetings})`,
+      });
+    }
+
+    const students = await this.prisma.student.findMany({
+      where: { classId: cs.classId },
+      select: { userId: true },
+    });
+
+    const meeting = await this.prisma.meeting.create({
+      data: {
+        classSubjectId,
+        meetingNumber: nextNumber,
+        attendances: {
+          create: students.map((s) => ({ studentId: s.userId })),
+        },
+      },
+    });
+
+    return {
+      id: meeting.id,
+      meetingNumber: meeting.meetingNumber,
+      status: meeting.status,
+      startedAt: meeting.startedAt,
+      studentCount: students.length,
+    };
+  }
+
+  async closeMeeting(userId: string, meetingId: string) {
+    const teacher = await this.getTeacher(userId);
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { classSubject: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException({ code: 'MEETING_NOT_FOUND', message: 'Pertemuan tidak ditemukan' });
+    }
+    if (meeting.classSubject.teacherId !== teacher.userId) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    if (meeting.status === MeetingStatus.CLOSED) {
+      throw new ConflictException({ code: 'MEETING_ALREADY_CLOSED', message: 'Pertemuan sudah ditutup' });
+    }
+    await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: { status: MeetingStatus.CLOSED, endedAt: new Date() },
+    });
+  }
+
+  async getAttendance(userId: string, meetingId: string) {
+    const teacher = await this.getTeacher(userId);
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { classSubject: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException({ code: 'MEETING_NOT_FOUND', message: 'Pertemuan tidak ditemukan' });
+    }
+    if (meeting.classSubject.teacherId !== teacher.userId) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    const attendances = await this.prisma.attendance.findMany({
+      where: { meetingId },
+      include: { student: { select: { userId: true, name: true, nis: true } } },
+      orderBy: { student: { name: 'asc' } },
+    });
+    return {
+      meeting: {
+        id: meeting.id,
+        meetingNumber: meeting.meetingNumber,
+        status: meeting.status,
+        startedAt: meeting.startedAt,
+        endedAt: meeting.endedAt,
+      },
+      entries: attendances.map((a) => ({
+        studentId: a.student.userId,
+        name: a.student.name,
+        nis: a.student.nis,
+        status: a.status,
+      })),
+    };
+  }
+
+  async updateAttendance(userId: string, meetingId: string, dto: UpdateAttendanceDto) {
+    const teacher = await this.getTeacher(userId);
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { classSubject: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException({ code: 'MEETING_NOT_FOUND', message: 'Pertemuan tidak ditemukan' });
+    }
+    if (meeting.classSubject.teacherId !== teacher.userId) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+    if (meeting.status === MeetingStatus.CLOSED) {
+      throw new ConflictException({ code: 'MEETING_CLOSED', message: 'Pertemuan sudah ditutup' });
+    }
+
+    await this.prisma.$transaction(
+      dto.entries.map((e) =>
+        this.prisma.attendance.update({
+          where: { meetingId_studentId: { meetingId, studentId: e.studentId } },
+          data: { status: e.status },
+        }),
+      ),
+    );
   }
 }

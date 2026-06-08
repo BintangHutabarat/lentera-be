@@ -15,6 +15,7 @@ import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AdminService } from './admin.service';
+import { CreateAcademicYearDto } from './dto/create-academic-year.dto';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { CreateClassDto } from './dto/create-class.dto';
 import { CreateClassSubjectDto } from './dto/create-class-subject.dto';
@@ -297,5 +298,39 @@ export class AdminController {
     @Param('chapterId') chapterId: string,
   ) {
     return this.adminService.deleteChapter(user.id, subjectId, chapterId);
+  }
+
+  // ── Academic Years ─────────────────────────────────────────────────────────
+
+  @Get('academic-years')
+  getAcademicYears(@CurrentUser() user: { id: string }) {
+    return this.adminService.getAcademicYears(user.id);
+  }
+
+  @Post('academic-years')
+  @HttpCode(HttpStatus.CREATED)
+  createAcademicYear(
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateAcademicYearDto,
+  ) {
+    return this.adminService.createAcademicYear(user.id, dto);
+  }
+
+  @Patch('academic-years/:id/activate')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  activateAcademicYear(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+  ) {
+    return this.adminService.activateAcademicYear(user.id, id);
+  }
+
+  @Delete('academic-years/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteAcademicYear(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+  ) {
+    return this.adminService.deleteAcademicYear(user.id, id);
   }
 }

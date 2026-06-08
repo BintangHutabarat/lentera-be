@@ -10,6 +10,19 @@ enum Role {
   STUDENT
   TEACHER
   ADMIN
+  PRINCIPAL
+}
+
+enum MeetingStatus {
+  OPEN
+  CLOSED
+}
+
+enum AttendanceStatus {
+  HADIR
+  SAKIT
+  IZIN
+  ALPHA
 }
 
 enum AdminScope {
@@ -53,10 +66,11 @@ model School {
   code      String   @unique
   createdAt DateTime @default(now())
 
-  users      User[]
-  classes    Class[]
-  subjects   Subject[]
-  forumPosts ForumPost[]
+  users         User[]
+  classes       Class[]
+  subjects      Subject[]
+  forumPosts    ForumPost[]
+  academicYears AcademicYear[]
 }
 
 model Class {
@@ -89,6 +103,7 @@ model User {
   student       Student?
   teacher       Teacher?
   admin         Admin?
+  principal     Principal?
   refreshTokens RefreshToken[]
   forumPosts    ForumPost[]
   forumReplies  ForumReply[]
@@ -114,6 +129,9 @@ model Student {
   submissions     AssignmentSubmission[]
   quizSessions    QuizSession[]
   badges          StudentBadge[]
+  attendances     Attendance[]
+  examGrades      ExamGrade[]
+  finalGrades     FinalGrade[]
 
   @@index([classId])
 }
@@ -166,16 +184,20 @@ model Subject {
 }
 
 model ClassSubject {
-  id        String  @id @default(cuid())
-  classId   String
-  class     Class   @relation(fields: [classId], references: [id])
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [userId])
+  id            String  @id @default(cuid())
+  classId       String
+  class         Class   @relation(fields: [classId], references: [id])
+  subjectId     String
+  subject       Subject @relation(fields: [subjectId], references: [id])
+  teacherId     String
+  teacher       Teacher @relation(fields: [teacherId], references: [userId])
+  totalMeetings Int     @default(16)
 
   assignments Assignment[]
   quizzes     Quiz[]
+  meetings    Meeting[]
+  exams       Exam[]
+  finalGrades FinalGrade[]
 
   @@unique([classId, subjectId])
 }
@@ -399,4 +421,98 @@ model Notification {
   createdAt DateTime         @default(now())
 
   @@index([userId, readAt, createdAt])
+}
+
+model Principal {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model AcademicYear {
+  id       String  @id @default(cuid())
+  schoolId String
+  school   School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  label    String
+  isActive Boolean @default(false)
+
+  finalGrades FinalGrade[]
+
+  @@unique([schoolId, label])
+}
+
+model Meeting {
+  id             String        @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject  @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  meetingNumber  Int
+  status         MeetingStatus @default(OPEN)
+  startedAt      DateTime      @default(now())
+  endedAt        DateTime?
+
+  attendances Attendance[]
+
+  @@unique([classSubjectId, meetingNumber])
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  meetingId String
+  meeting   Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student          @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  status    AttendanceStatus @default(ALPHA)
+
+  @@unique([meetingId, studentId])
+}
+
+model Exam {
+  id             String       @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?      @db.Text
+  maxScore       Int          @default(100)
+  date           DateTime?
+  createdById    String
+  createdAt      DateTime     @default(now())
+
+  grades ExamGrade[]
+
+  @@index([classSubjectId])
+}
+
+model ExamGrade {
+  id         String    @id @default(cuid())
+  examId     String
+  exam       Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  score      Int?
+  notes      String?   @db.Text
+  gradedAt   DateTime?
+  gradedById String?
+
+  @@unique([examId, studentId])
+}
+
+model FinalGrade {
+  id             String       @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  semester       Int
+  refAssignment  Float?
+  refQuiz        Float?
+  refExam        Float?
+  refAttendance  Float?
+  finalGrade     Int?
+  notes          String?      @db.Text
+  gradedAt       DateTime?
+  gradedById     String?
+
+  @@unique([classSubjectId, studentId, academicYearId, semester])
 }

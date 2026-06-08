@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateClassSubjectDto {
   @IsString()
@@ -9,4 +9,10 @@ export class CreateClassSubjectDto {
 
   @IsString()
   teacherId: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  totalMeetings?: number;
 }

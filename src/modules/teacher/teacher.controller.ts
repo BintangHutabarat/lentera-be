@@ -21,6 +21,7 @@ import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { TeacherService } from './teacher.service';
 import { ExportService } from './export.service';
@@ -230,5 +231,39 @@ export class TeacherController {
     @Res() res: Response,
   ) {
     return this.exportService.exportQuizScores(user.id, id, res);
+  }
+
+  // ── Meetings & Attendance ──────────────────────────────────────────────────
+
+  @Get('class-subjects/:id/meetings')
+  getMeetings(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.getMeetings(user.id, id);
+  }
+
+  @Post('class-subjects/:id/meetings')
+  @HttpCode(HttpStatus.CREATED)
+  openMeeting(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.openMeeting(user.id, id);
+  }
+
+  @Patch('meetings/:id/close')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  closeMeeting(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.closeMeeting(user.id, id);
+  }
+
+  @Get('meetings/:id/attendance')
+  getAttendance(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.teacherService.getAttendance(user.id, id);
+  }
+
+  @Patch('meetings/:id/attendance')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  updateAttendance(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateAttendanceDto,
+  ) {
+    return this.teacherService.updateAttendance(user.id, id, dto);
   }
 }
