@@ -27,6 +27,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { UpsertExamGradesDto } from './dto/upsert-exam-grades.dto';
+import { UpsertFinalGradesDto } from './dto/upsert-final-grades.dto';
 import { TeacherService } from './teacher.service';
 import { ExportService } from './export.service';
 
@@ -317,5 +318,34 @@ export class TeacherController {
     @Body() dto: UpsertExamGradesDto,
   ) {
     return this.teacherService.upsertExamGrades(user.id, id, dto);
+  }
+
+  // ── Final Grades ───────────────────────────────────────────────────────────
+
+  @ApiQuery({ name: 'academicYearId', required: true })
+  @ApiQuery({ name: 'semester', required: true, enum: [1, 2] })
+  @Get('class-subjects/:id/final-grades')
+  getFinalGrades(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('academicYearId') academicYearId: string,
+    @Query('semester') semester: string,
+  ) {
+    return this.teacherService.getFinalGrades(
+      user.id,
+      id,
+      academicYearId,
+      parseInt(semester, 10),
+    );
+  }
+
+  @Put('class-subjects/:id/final-grades')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  upsertFinalGrades(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpsertFinalGradesDto,
+  ) {
+    return this.teacherService.upsertFinalGrades(user.id, id, dto);
   }
 }

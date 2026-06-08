@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MeetingStatus, NotificationType } from '@prisma/client';
+import { AttendanceStatus, MeetingStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateExamDto } from './dto/create-exam.dto';
@@ -16,6 +16,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { UpsertExamGradesDto } from './dto/upsert-exam-grades.dto';
+import { UpsertFinalGradesDto } from './dto/upsert-final-grades.dto';
 
 @Injectable()
 export class TeacherService {
@@ -919,6 +920,188 @@ export class TeacherService {
           },
         }),
       ),
+    );
+  }
+
+  // ── Final Grades ───────────────────────────────────────────────────────────
+
+  private async computeReferences(classSubjectId: string, classId: string) {
+    const [assignments, quizzes, exams, meetings, students] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: { classSubjectId },
+        select: { id: true, maxScore: true, submissions: { select: { studentId: true, score: true } } },
+      }),
+      this.prisma.quiz.findMany({
+        where: { classSubjectId },
+        select: { id: true, sessions: { where: { submittedAt: { not: null } }, select: { studentId: true, score: true } } },
+      }),
+      this.prisma.exam.findMany({
+        where: { classSubjectId },
+        select: { id: true, maxScore: true, grades: { select: { studentId: true, score: true } } },
+      }),
+      this.prisma.meeting.findMany({
+        where: { classSubjectId },
+        select: { attendances: { select: { studentId: true, status: true } } },
+      }),
+      this.prisma.student.findMany({
+        where: { classId },
+        select: { userId: true, name: true, nis: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const refs = new Map<string, { refAssignment: number | null; refQuiz: number | null; refExam: number | null; refAttendance: number | null }>();
+
+    for (const s of students) {
+      const aPercents: number[] = [];
+      for (const a of assignments) {
+        const sub = a.submissions.find((x) => x.studentId === s.userId);
+        if (sub?.score != null && a.maxScore > 0) {
+          aPercents.push((sub.score / a.maxScore) * 100);
+        }
+      }
+      const qScores: number[] = [];
+      for (const q of quizzes) {
+        for (const sess of q.sessions) {
+          if (sess.studentId === s.userId && sess.score != null) {
+            qScores.push(sess.score);
+          }
+        }
+      }
+      const ePercents: number[] = [];
+      for (const ex of exams) {
+        const g = ex.grades.find((x) => x.studentId === s.userId);
+        if (g?.score != null && ex.maxScore > 0) {
+          ePercents.push((g.score / ex.maxScore) * 100);
+        }
+      }
+      let attendTotal = 0;
+      let attendPresent = 0;
+      for (const m of meetings) {
+        const att = m.attendances.find((x) => x.studentId === s.userId);
+        if (att) {
+          attendTotal++;
+          if (att.status === AttendanceStatus.HADIR) attendPresent++;
+        }
+      }
+
+      const avg = (arr: number[]) =>
+        arr.length === 0 ? null : Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100;
+
+      refs.set(s.userId, {
+        refAssignment: avg(aPercents),
+        refQuiz: avg(qScores),
+        refExam: avg(ePercents),
+        refAttendance: attendTotal === 0 ? null : Math.round((attendPresent / attendTotal) * 10000) / 100,
+      });
+    }
+
+    return { students, refs };
+  }
+
+  async getFinalGrades(
+    userId: string,
+    classSubjectId: string,
+    academicYearId: string,
+    semester: number,
+  ) {
+    const teacher = await this.getTeacher(userId);
+    const cs = await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+
+    const ay = await this.prisma.academicYear.findUnique({ where: { id: academicYearId } });
+    if (!ay || ay.schoolId !== teacher.user.schoolId) {
+      throw new NotFoundException({ code: 'ACADEMIC_YEAR_NOT_FOUND', message: 'Tahun ajaran tidak ditemukan' });
+    }
+
+    const [{ students, refs }, saved] = await Promise.all([
+      this.computeReferences(classSubjectId, cs.classId),
+      this.prisma.finalGrade.findMany({
+        where: { classSubjectId, academicYearId, semester },
+      }),
+    ]);
+
+    const savedMap = new Map(saved.map((g) => [g.studentId, g]));
+
+    return {
+      classSubjectId,
+      academicYearId,
+      academicYearLabel: ay.label,
+      semester,
+      entries: students.map((s) => {
+        const ref = refs.get(s.userId)!;
+        const fg = savedMap.get(s.userId);
+        return {
+          studentId: s.userId,
+          name: s.name,
+          nis: s.nis,
+          refAssignment: ref.refAssignment,
+          refQuiz: ref.refQuiz,
+          refExam: ref.refExam,
+          refAttendance: ref.refAttendance,
+          finalGrade: fg?.finalGrade ?? null,
+          notes: fg?.notes ?? null,
+          gradedAt: fg?.gradedAt ?? null,
+        };
+      }),
+    };
+  }
+
+  async upsertFinalGrades(userId: string, classSubjectId: string, dto: UpsertFinalGradesDto) {
+    const teacher = await this.getTeacher(userId);
+    const cs = await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
+
+    const ay = await this.prisma.academicYear.findUnique({ where: { id: dto.academicYearId } });
+    if (!ay || ay.schoolId !== teacher.user.schoolId) {
+      throw new NotFoundException({ code: 'ACADEMIC_YEAR_NOT_FOUND', message: 'Tahun ajaran tidak ditemukan' });
+    }
+
+    const { refs } = await this.computeReferences(classSubjectId, cs.classId);
+    const now = new Date();
+
+    await this.prisma.$transaction(
+      dto.entries.map((e) => {
+        const ref = refs.get(e.studentId) ?? {
+          refAssignment: null,
+          refQuiz: null,
+          refExam: null,
+          refAttendance: null,
+        };
+        const hasGrade = e.finalGrade !== null && e.finalGrade !== undefined;
+        return this.prisma.finalGrade.upsert({
+          where: {
+            classSubjectId_studentId_academicYearId_semester: {
+              classSubjectId,
+              studentId: e.studentId,
+              academicYearId: dto.academicYearId,
+              semester: dto.semester,
+            },
+          },
+          create: {
+            classSubjectId,
+            studentId: e.studentId,
+            academicYearId: dto.academicYearId,
+            semester: dto.semester,
+            refAssignment: ref.refAssignment,
+            refQuiz: ref.refQuiz,
+            refExam: ref.refExam,
+            refAttendance: ref.refAttendance,
+            finalGrade: e.finalGrade ?? null,
+            notes: e.notes ?? null,
+            gradedAt: hasGrade ? now : null,
+            gradedById: hasGrade ? teacher.userId : null,
+          },
+          update: {
+            refAssignment: ref.refAssignment,
+            refQuiz: ref.refQuiz,
+            refExam: ref.refExam,
+            refAttendance: ref.refAttendance,
+            finalGrade: e.finalGrade ?? null,
+            notes: e.notes ?? null,
+            gradedAt: hasGrade ? now : null,
+            gradedById: hasGrade ? teacher.userId : null,
+          },
+        });
+      }),
     );
   }
 }
