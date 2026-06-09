@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AttendanceStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -76,6 +77,69 @@ export class StudentsService {
     const student = await this.prisma.student.findUnique({ where: { userId } });
     if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
     await this.prisma.student.update({ where: { userId }, data: { avatar: avatarUrl } });
+  }
+
+  async getAttendanceByClassSubject(userId: string, classSubjectId: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) {
+      throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
+    }
+    const cs = await this.prisma.classSubject.findUnique({
+      where: { id: classSubjectId },
+      include: { subject: { select: { id: true, name: true, shortName: true } } },
+    });
+    if (!cs) {
+      throw new NotFoundException({ code: 'CLASS_SUBJECT_NOT_FOUND', message: 'Kelas-mapel tidak ditemukan' });
+    }
+    if (cs.classId !== student.classId) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+    }
+
+    const meetings = await this.prisma.meeting.findMany({
+      where: { classSubjectId },
+      orderBy: { meetingNumber: 'asc' },
+      include: {
+        attendances: { where: { studentId: userId }, select: { status: true } },
+      },
+    });
+
+    let total = 0;
+    let hadir = 0;
+    let sakit = 0;
+    let izin = 0;
+    let alpha = 0;
+    const entries = meetings.map((m) => {
+      const status = m.attendances[0]?.status ?? null;
+      if (status) {
+        total++;
+        if (status === AttendanceStatus.HADIR) hadir++;
+        else if (status === AttendanceStatus.SAKIT) sakit++;
+        else if (status === AttendanceStatus.IZIN) izin++;
+        else if (status === AttendanceStatus.ALPHA) alpha++;
+      }
+      return {
+        meetingId: m.id,
+        meetingNumber: m.meetingNumber,
+        status,
+        date: m.startedAt,
+        meetingStatus: m.status,
+      };
+    });
+
+    return {
+      classSubjectId,
+      subject: cs.subject,
+      totalMeetings: cs.totalMeetings,
+      summary: {
+        total,
+        hadir,
+        sakit,
+        izin,
+        alpha,
+        percentageHadir: total === 0 ? null : Math.round((hadir / total) * 10000) / 100,
+      },
+      meetings: entries,
+    };
   }
 
   private xpMax(level: number) {

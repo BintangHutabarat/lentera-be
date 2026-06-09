@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { IsString, IsUrl } from 'class-validator';
@@ -41,5 +41,11 @@ export class StudentsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   updateAvatar(@CurrentUser() user: { id: string }, @Body() dto: UpdateAvatarDto) {
     return this.studentsService.updateAvatar(user.id, dto.avatarUrl);
+  }
+
+  @Roles(Role.STUDENT)
+  @Get('me/class-subjects/:id/attendance')
+  getAttendance(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.studentsService.getAttendanceByClassSubject(user.id, id);
   }
 }
