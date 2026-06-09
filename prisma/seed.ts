@@ -6,8 +6,14 @@ import * as argon2 from 'argon2';
 const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({ adapter });
 
+function generatePassword(length = 12): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 async function main() {
-  const passwordHash = await argon2.hash('password');
+  const adminPassword = generatePassword();
+  const passwordHash = await argon2.hash(adminPassword);
 
   const school = await prisma.school.upsert({
     where: { code: 'YDIAH' },
@@ -38,7 +44,7 @@ async function main() {
   });
 
   console.log('Seed selesai');
-  console.log('Admin → email: admin@ydiah.com | pass: password');
+  console.log('Admin → email: admin@ydiah.com | pass:', adminPassword);
 }
 
 main()
