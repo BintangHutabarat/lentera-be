@@ -1,14 +1,14 @@
 -- DropForeignKey
-ALTER TABLE `assignmentsubmission` DROP FOREIGN KEY `AssignmentSubmission_assignmentId_fkey`;
+ALTER TABLE `AssignmentSubmission` DROP FOREIGN KEY `AssignmentSubmission_assignmentId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `quizquestion` DROP FOREIGN KEY `QuizQuestion_quizId_fkey`;
+ALTER TABLE `QuizQuestion` DROP FOREIGN KEY `QuizQuestion_quizId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `quizsession` DROP FOREIGN KEY `QuizSession_quizId_fkey`;
+ALTER TABLE `QuizSession` DROP FOREIGN KEY `QuizSession_quizId_fkey`;
 
 -- DropIndex
-DROP INDEX `QuizSession_quizId_fkey` ON `quizsession`;
+DROP INDEX `QuizSession_quizId_fkey` ON `QuizSession`;
 
 -- AddForeignKey
 ALTER TABLE `AssignmentSubmission` ADD CONSTRAINT `AssignmentSubmission_assignmentId_fkey` FOREIGN KEY (`assignmentId`) REFERENCES `Assignment`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

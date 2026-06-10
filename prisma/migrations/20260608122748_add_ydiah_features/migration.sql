@@ -1,8 +1,8 @@
 -- AlterTable
-ALTER TABLE `classsubject` ADD COLUMN `totalMeetings` INTEGER NOT NULL DEFAULT 16;
+ALTER TABLE `ClassSubject` ADD COLUMN `totalMeetings` INTEGER NOT NULL DEFAULT 16;
 
 -- AlterTable
-ALTER TABLE `user` MODIFY `role` ENUM('STUDENT', 'TEACHER', 'ADMIN', 'PRINCIPAL') NOT NULL;
+ALTER TABLE `User` MODIFY `role` ENUM('STUDENT', 'TEACHER', 'ADMIN', 'PRINCIPAL') NOT NULL;
 
 -- CreateTable
 CREATE TABLE `Principal` (

@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE `assignmentsubmission` ADD COLUMN `answers` JSON NULL;
+ALTER TABLE `AssignmentSubmission` ADD COLUMN `answers` JSON NULL;

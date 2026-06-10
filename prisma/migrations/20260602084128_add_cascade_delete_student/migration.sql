@@ -1,17 +1,17 @@
 -- DropForeignKey
-ALTER TABLE `assignmentsubmission` DROP FOREIGN KEY `AssignmentSubmission_studentId_fkey`;
+ALTER TABLE `AssignmentSubmission` DROP FOREIGN KEY `AssignmentSubmission_studentId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `chapterprogress` DROP FOREIGN KEY `ChapterProgress_studentId_fkey`;
+ALTER TABLE `ChapterProgress` DROP FOREIGN KEY `ChapterProgress_studentId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `quizsession` DROP FOREIGN KEY `QuizSession_studentId_fkey`;
+ALTER TABLE `QuizSession` DROP FOREIGN KEY `QuizSession_studentId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `studentbadge` DROP FOREIGN KEY `StudentBadge_studentId_fkey`;
+ALTER TABLE `StudentBadge` DROP FOREIGN KEY `StudentBadge_studentId_fkey`;
 
 -- DropIndex
-DROP INDEX `AssignmentSubmission_studentId_fkey` ON `assignmentsubmission`;
+DROP INDEX `AssignmentSubmission_studentId_fkey` ON `AssignmentSubmission`;
 
 -- AddForeignKey
 ALTER TABLE `ChapterProgress` ADD CONSTRAINT `ChapterProgress_studentId_fkey` FOREIGN KEY (`studentId`) REFERENCES `Student`(`userId`) ON DELETE CASCADE ON UPDATE CASCADE;

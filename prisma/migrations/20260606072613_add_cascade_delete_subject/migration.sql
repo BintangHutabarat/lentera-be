@@ -1,17 +1,17 @@
 -- DropForeignKey
-ALTER TABLE `chapter` DROP FOREIGN KEY `Chapter_subjectId_fkey`;
+ALTER TABLE `Chapter` DROP FOREIGN KEY `Chapter_subjectId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `chapterprogress` DROP FOREIGN KEY `ChapterProgress_chapterId_fkey`;
+ALTER TABLE `ChapterProgress` DROP FOREIGN KEY `ChapterProgress_chapterId_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `scheduleslot` DROP FOREIGN KEY `ScheduleSlot_subjectId_fkey`;
+ALTER TABLE `ScheduleSlot` DROP FOREIGN KEY `ScheduleSlot_subjectId_fkey`;
 
 -- DropIndex
-DROP INDEX `ChapterProgress_chapterId_fkey` ON `chapterprogress`;
+DROP INDEX `ChapterProgress_chapterId_fkey` ON `ChapterProgress`;
 
 -- DropIndex
-DROP INDEX `ScheduleSlot_subjectId_fkey` ON `scheduleslot`;
+DROP INDEX `ScheduleSlot_subjectId_fkey` ON `ScheduleSlot`;
 
 -- AddForeignKey
 ALTER TABLE `Chapter` ADD CONSTRAINT `Chapter_subjectId_fkey` FOREIGN KEY (`subjectId`) REFERENCES `Subject`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
