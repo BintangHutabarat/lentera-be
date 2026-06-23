@@ -13,9 +13,9 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { MateriType, Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -42,6 +42,23 @@ class AnnouncementDto {
 class UpdateChapterContentDto {
   @IsString()
   content: string;
+}
+
+class CreateMateriDto {
+  @IsEnum(MateriType)
+  type: MateriType;
+
+  @IsString()
+  content: string;
+
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+}
+
+class ChapterDto {
+  @IsString()
+  title: string;
 }
 
 @ApiTags('teacher')
@@ -205,7 +222,85 @@ export class TeacherController {
     return this.teacherService.getStudentProgress(user.id, classSubjectId, studentId);
   }
 
-  // ── Chapter Content ────────────────────────────────────────────────────────
+  // ── Materi (MateriItem) ────────────────────────────────────────────────────
+
+  @Get('subjects/:classSubjectId/materi')
+  getMateri(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+  ) {
+    return this.teacherService.getMateri(user.id, classSubjectId);
+  }
+
+  @Post('subjects/:classSubjectId/materi')
+  @HttpCode(HttpStatus.CREATED)
+  createMateri(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Body() dto: CreateMateriDto,
+  ) {
+    return this.teacherService.createMateri(user.id, classSubjectId, dto);
+  }
+
+  @Delete('subjects/:classSubjectId/materi/:materiId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteMateri(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Param('materiId') materiId: string,
+  ) {
+    return this.teacherService.deleteMateri(user.id, classSubjectId, materiId);
+  }
+
+  // ── Chapter / Materi management ──────────────────────────────────────────────
+
+  @Get('subjects/:classSubjectId/chapters')
+  getChapters(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+  ) {
+    return this.teacherService.getChapters(user.id, classSubjectId);
+  }
+
+  @Get('subjects/:classSubjectId/chapters/:chapterId')
+  getChapter(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Param('chapterId') chapterId: string,
+  ) {
+    return this.teacherService.getChapter(user.id, classSubjectId, chapterId);
+  }
+
+  @Post('subjects/:classSubjectId/chapters')
+  @HttpCode(HttpStatus.CREATED)
+  createChapter(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Body() dto: ChapterDto,
+  ) {
+    return this.teacherService.createChapter(user.id, classSubjectId, dto.title);
+  }
+
+  @Patch('subjects/:classSubjectId/chapters/:chapterId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  renameChapter(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Param('chapterId') chapterId: string,
+    @Body() dto: ChapterDto,
+  ) {
+    return this.teacherService.renameChapter(user.id, classSubjectId, chapterId, dto.title);
+  }
+
+  @Delete('subjects/:classSubjectId/chapters/:chapterId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteChapter(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Param('chapterId') chapterId: string,
+  ) {
+    return this.teacherService.deleteChapter(user.id, classSubjectId, chapterId);
+  }
 
   @Patch('subjects/:classSubjectId/chapters/:chapterId/content')
   @HttpCode(HttpStatus.NO_CONTENT)

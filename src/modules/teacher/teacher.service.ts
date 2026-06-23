@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AttendanceStatus, MeetingStatus, NotificationType } from '@prisma/client';
+import { AttendanceStatus, MateriType, MeetingStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateExamDto } from './dto/create-exam.dto';
@@ -597,6 +597,85 @@ export class TeacherService {
     const accessible = chapter.subject.classOffers.some(offer => offer.id === classSubjectId);
     if (!accessible) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
     await this.prisma.chapter.update({ where: { id: chapterId }, data: { content } });
+  }
+
+  // ── Chapter management (teacher owns materi) ─────────────────────────────────
+
+  async getChapters(userId: string, classSubjectId: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    const chapters = await this.prisma.chapter.findMany({
+      where: { subjectId: cs.subjectId },
+      orderBy: { order: 'asc' },
+    });
+    return chapters.map(c => ({ id: c.id, order: c.order, title: c.title, hasContent: !!c.content }));
+  }
+
+  async getChapter(userId: string, classSubjectId: string, chapterId: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    const chapter = await this.assertChapterInSubject(chapterId, cs.subjectId);
+    return { id: chapter.id, order: chapter.order, title: chapter.title, content: chapter.content ?? '' };
+  }
+
+  async createChapter(userId: string, classSubjectId: string, title: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    const trimmed = title.trim();
+    if (!trimmed) throw new BadRequestException({ code: 'TITLE_REQUIRED', message: 'Judul bab wajib diisi' });
+    const last = await this.prisma.chapter.findFirst({
+      where: { subjectId: cs.subjectId },
+      orderBy: { order: 'desc' },
+    });
+    const chapter = await this.prisma.chapter.create({
+      data: { subjectId: cs.subjectId, order: (last?.order ?? 0) + 1, title: trimmed },
+    });
+    return { id: chapter.id, order: chapter.order, title: chapter.title, hasContent: false };
+  }
+
+  async renameChapter(userId: string, classSubjectId: string, chapterId: string, title: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    await this.assertChapterInSubject(chapterId, cs.subjectId);
+    const trimmed = title.trim();
+    if (!trimmed) throw new BadRequestException({ code: 'TITLE_REQUIRED', message: 'Judul bab wajib diisi' });
+    await this.prisma.chapter.update({ where: { id: chapterId }, data: { title: trimmed } });
+  }
+
+  async deleteChapter(userId: string, classSubjectId: string, chapterId: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    await this.assertChapterInSubject(chapterId, cs.subjectId);
+    await this.prisma.chapter.delete({ where: { id: chapterId } });
+  }
+
+  async getMateri(userId: string, classSubjectId: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    return this.prisma.materiItem.findMany({
+      where: { subjectId: cs.subjectId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, type: true, content: true, fileName: true, createdAt: true },
+    });
+  }
+
+  async createMateri(userId: string, classSubjectId: string, dto: { type: MateriType; content: string; fileName?: string }) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    return this.prisma.materiItem.create({
+      data: { subjectId: cs.subjectId, type: dto.type, content: dto.content, fileName: dto.fileName },
+      select: { id: true, type: true, content: true, fileName: true, createdAt: true },
+    });
+  }
+
+  async deleteMateri(userId: string, classSubjectId: string, materiId: string) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    const item = await this.prisma.materiItem.findUnique({ where: { id: materiId } });
+    if (!item || item.subjectId !== cs.subjectId) {
+      throw new NotFoundException({ code: 'MATERI_NOT_FOUND', message: 'Materi tidak ditemukan' });
+    }
+    await this.prisma.materiItem.delete({ where: { id: materiId } });
+  }
+
+  private async assertChapterInSubject(chapterId: string, subjectId: string) {
+    const chapter = await this.prisma.chapter.findUnique({ where: { id: chapterId } });
+    if (!chapter || chapter.subjectId !== subjectId) {
+      throw new NotFoundException({ code: 'CHAPTER_NOT_FOUND', message: 'Bab tidak ditemukan' });
+    }
+    return chapter;
   }
 
   async getQuizSessions(userId: string, quizId: string) {

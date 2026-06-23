@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotImplementedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as Minio from 'minio';
 import { PresignDto } from './dto/presign.dto';
 
 const ALLOWED: Record<string, { maxBytes: number; mimes: string[] }> = {
@@ -11,11 +12,36 @@ const ALLOWED: Record<string, { maxBytes: number; mimes: string[] }> = {
     maxBytes: 2 * 1024 * 1024,
     mimes: ['image/jpeg', 'image/png', 'image/webp'],
   },
+  chapter_content: {
+    maxBytes: 10 * 1024 * 1024,
+    mimes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  materi: {
+    maxBytes: 10 * 1024 * 1024,
+    mimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+  },
 };
+
+const PRESIGN_EXPIRES = 15 * 60; // 15 menit
 
 @Injectable()
 export class UploadsService {
-  constructor(private configService: ConfigService) {}
+  private client: Minio.Client;
+  private bucket: string;
+  private publicUrl: string;
+
+  constructor(private configService: ConfigService) {
+    this.bucket = this.configService.getOrThrow<string>('MINIO_BUCKET');
+    this.publicUrl = this.configService.getOrThrow<string>('MINIO_PUBLIC_URL');
+
+    this.client = new Minio.Client({
+      endPoint: this.configService.getOrThrow<string>('MINIO_ENDPOINT'),
+      port: Number(this.configService.getOrThrow<string>('MINIO_PORT')),
+      useSSL: this.configService.get<string>('MINIO_USE_SSL') === 'true',
+      accessKey: this.configService.getOrThrow<string>('MINIO_ACCESS_KEY'),
+      secretKey: this.configService.getOrThrow<string>('MINIO_SECRET_KEY'),
+    });
+  }
 
   async presign(userId: string, dto: PresignDto) {
     const rule = ALLOWED[dto.purpose];
@@ -23,19 +49,22 @@ export class UploadsService {
     if (dto.sizeBytes > rule.maxBytes) throw new BadRequestException({ code: 'FILE_TOO_LARGE', message: `Ukuran maks ${rule.maxBytes / 1024 / 1024}MB` });
     if (!rule.mimes.includes(dto.mimeType)) throw new BadRequestException({ code: 'INVALID_FILE_TYPE', message: 'Tipe file tidak didukung' });
 
-    const storageUrl = this.configService.get<string>('STORAGE_URL');
-    if (!storageUrl) {
-      throw new NotImplementedException({ code: 'STORAGE_NOT_CONFIGURED', message: 'Storage belum dikonfigurasi' });
-    }
-
-    // Placeholder: generate a file key; actual pre-signed URL requires S3/MinIO SDK
     const ext = dto.filename.split('.').pop();
-    const fileKey = `${dto.purpose}/${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${userId}/${Date.now()}.${ext}`;
+    const now = new Date();
+    const fileKey = `${dto.purpose}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${userId}/${Date.now()}.${ext}`;
 
-    return {
-      uploadUrl: `${storageUrl}/${fileKey}?presigned=1`,
-      fileKey,
-      expiresInSeconds: 900,
-    };
+    try {
+      const uploadUrl = await this.client.presignedPutObject(this.bucket, fileKey, PRESIGN_EXPIRES);
+      const fileUrl = `${this.publicUrl}/${this.bucket}/${fileKey}`;
+
+      return {
+        uploadUrl,
+        fileKey,
+        fileUrl,
+        expiresInSeconds: PRESIGN_EXPIRES,
+      };
+    } catch {
+      throw new InternalServerErrorException({ code: 'STORAGE_ERROR', message: 'Gagal membuat upload URL' });
+    }
   }
 }

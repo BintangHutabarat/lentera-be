@@ -39,6 +39,12 @@ enum SubjectColor {
   PURPLE
 }
 
+enum MateriType {
+  IMAGE
+  PDF
+  TEXT
+}
+
 enum AssignmentType {
   ONLINE
   UPLOAD_FILE
@@ -176,6 +182,7 @@ model Subject {
   createdAt DateTime     @default(now())
 
   chapters      Chapter[]
+  materiItems   MateriItem[]
   classOffers   ClassSubject[]
   scheduleSlots ScheduleSlot[]
   forumPosts    ForumPost[]
@@ -213,6 +220,18 @@ model Chapter {
   progress ChapterProgress[]
 
   @@unique([subjectId, order])
+}
+
+model MateriItem {
+  id        String     @id @default(cuid())
+  subjectId String
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  type      MateriType
+  content   String     @db.Text
+  fileName  String?
+  createdAt DateTime   @default(now())
+
+  @@index([subjectId, createdAt])
 }
 
 model ChapterProgress {
