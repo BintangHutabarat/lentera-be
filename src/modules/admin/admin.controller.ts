@@ -120,9 +120,13 @@ export class AdminController {
 
   // ── Classes ────────────────────────────────────────────────────────────────
 
+  @ApiQuery({ name: 'academicYearId', required: false })
   @Get('classes')
-  getClasses(@CurrentUser() user: { id: string }) {
-    return this.adminService.getClasses(user.id);
+  getClasses(
+    @CurrentUser() user: { id: string },
+    @Query('academicYearId') academicYearId?: string,
+  ) {
+    return this.adminService.getClasses(user.id, academicYearId);
   }
 
   @Get('classes/:id')

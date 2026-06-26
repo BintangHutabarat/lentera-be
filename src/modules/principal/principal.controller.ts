@@ -121,36 +121,22 @@ export class PrincipalController {
   // ── Final Grades & Reports ─────────────────────────────────────────────────
 
   @ApiQuery({ name: 'academicYearId', required: true })
-  @ApiQuery({ name: 'semester', required: true, enum: [1, 2] })
   @Get('class-subjects/:id/final-grades')
   getClassSubjectFinalGrades(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Query('academicYearId') academicYearId: string,
-    @Query('semester') semester: string,
   ) {
-    return this.principalService.getClassSubjectFinalGrades(
-      user.id,
-      id,
-      academicYearId,
-      parseInt(semester, 10),
-    );
+    return this.principalService.getClassSubjectFinalGrades(user.id, id, academicYearId);
   }
 
   @ApiQuery({ name: 'academicYearId', required: true })
-  @ApiQuery({ name: 'semester', required: true, enum: [1, 2] })
   @Get('classes/:id/report')
   getClassReport(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Query('academicYearId') academicYearId: string,
-    @Query('semester') semester: string,
   ) {
-    return this.principalService.getClassReport(
-      user.id,
-      id,
-      academicYearId,
-      parseInt(semester, 10),
-    );
+    return this.principalService.getClassReport(user.id, id, academicYearId);
   }
 }

@@ -40,7 +40,6 @@ export class QuizzesService {
           id: q.id,
           title: q.title,
           subject: { id: cs.subject.id, name: cs.subject.name, color: cs.subject.color.toLowerCase() },
-          chapter: q.chapter,
           totalQuestions: q.totalQuestions,
           durationMinutes: q.durationMinutes,
           completed: !!last,

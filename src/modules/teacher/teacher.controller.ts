@@ -13,7 +13,8 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MateriType, Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -44,16 +45,29 @@ class UpdateChapterContentDto {
   content: string;
 }
 
-class CreateMateriDto {
+class MateriAttachmentDto {
   @IsEnum(MateriType)
   type: MateriType;
 
   @IsString()
   content: string;
 
-  @IsOptional()
   @IsString()
-  fileName?: string;
+  fileName: string;
+}
+
+class CreateMateriDto {
+  @IsString()
+  title: string;
+
+  @IsString()
+  body: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MateriAttachmentDto)
+  attachments?: MateriAttachmentDto[];
 }
 
 class ChapterDto {
@@ -230,6 +244,15 @@ export class TeacherController {
     @Param('classSubjectId') classSubjectId: string,
   ) {
     return this.teacherService.getMateri(user.id, classSubjectId);
+  }
+
+  @Get('subjects/:classSubjectId/materi/:materiId')
+  getMateriDetail(
+    @CurrentUser() user: { id: string },
+    @Param('classSubjectId') classSubjectId: string,
+    @Param('materiId') materiId: string,
+  ) {
+    return this.teacherService.getMateriDetail(user.id, classSubjectId, materiId);
   }
 
   @Post('subjects/:classSubjectId/materi')
@@ -418,20 +441,13 @@ export class TeacherController {
   // ── Final Grades ───────────────────────────────────────────────────────────
 
   @ApiQuery({ name: 'academicYearId', required: true })
-  @ApiQuery({ name: 'semester', required: true, enum: [1, 2] })
   @Get('class-subjects/:id/final-grades')
   getFinalGrades(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Query('academicYearId') academicYearId: string,
-    @Query('semester') semester: string,
   ) {
-    return this.teacherService.getFinalGrades(
-      user.id,
-      id,
-      academicYearId,
-      parseInt(semester, 10),
-    );
+    return this.teacherService.getFinalGrades(user.id, id, academicYearId);
   }
 
   @Put('class-subjects/:id/final-grades')

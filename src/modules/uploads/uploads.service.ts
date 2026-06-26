@@ -12,14 +12,6 @@ const ALLOWED: Record<string, { maxBytes: number; mimes: string[] }> = {
     maxBytes: 2 * 1024 * 1024,
     mimes: ['image/jpeg', 'image/png', 'image/webp'],
   },
-  chapter_content: {
-    maxBytes: 10 * 1024 * 1024,
-    mimes: ['image/jpeg', 'image/png', 'image/webp'],
-  },
-  materi: {
-    maxBytes: 10 * 1024 * 1024,
-    mimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
-  },
 };
 
 const PRESIGN_EXPIRES = 15 * 60; // 15 menit

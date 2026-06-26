@@ -48,4 +48,10 @@ export class StudentsController {
   getAttendance(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.studentsService.getAttendanceByClassSubject(user.id, id);
   }
+
+  @Roles(Role.STUDENT)
+  @Get('me/class-subjects/:id/materi')
+  getMateri(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.studentsService.getMateri(user.id, id);
+  }
 }

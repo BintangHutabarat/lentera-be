@@ -385,7 +385,6 @@ export class PrincipalService {
     userId: string,
     classSubjectId: string,
     academicYearId: string,
-    semester: number,
   ) {
     const principal = await this.getPrincipal(userId);
     const cs = await this.prisma.classSubject.findUnique({
@@ -412,7 +411,7 @@ export class PrincipalService {
         orderBy: { name: 'asc' },
       }),
       this.prisma.finalGrade.findMany({
-        where: { classSubjectId, academicYearId, semester },
+        where: { classSubjectId, academicYearId },
       }),
     ]);
     const map = new Map(grades.map((g) => [g.studentId, g]));
@@ -422,7 +421,6 @@ export class PrincipalService {
       subject: cs.subject,
       teacher: cs.teacher,
       academicYearLabel: ay.label,
-      semester,
       entries: students.map((s) => {
         const g = map.get(s.userId);
         return {
@@ -445,7 +443,6 @@ export class PrincipalService {
     userId: string,
     classId: string,
     academicYearId: string,
-    semester: number,
   ) {
     const principal = await this.getPrincipal(userId);
     const cls = await this.prisma.class.findUnique({
@@ -456,7 +453,7 @@ export class PrincipalService {
           include: {
             subject: { select: { id: true, name: true, shortName: true } },
             teacher: { select: { userId: true, name: true } },
-            finalGrades: { where: { academicYearId, semester } },
+            finalGrades: { where: { academicYearId } },
             meetings: { select: { attendances: { select: { studentId: true, status: true } } } },
           },
         },
@@ -515,7 +512,6 @@ export class PrincipalService {
       className: cls.name,
       gradeYear: cls.gradeYear,
       academicYearLabel: ay.label,
-      semester,
       subjects: subjectsReport,
     };
   }

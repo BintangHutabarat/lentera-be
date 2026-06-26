@@ -2,7 +2,6 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -29,10 +28,6 @@ export class FinalGradeEntryDto {
 export class UpsertFinalGradesDto {
   @IsString()
   academicYearId: string;
-
-  @IsInt()
-  @IsIn([1, 2])
-  semester: number;
 
   @IsArray()
   @ArrayMinSize(1)

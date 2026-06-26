@@ -401,7 +401,6 @@ export class TeacherService {
     return quizzes.map(q => ({
       id: q.id,
       title: q.title,
-      chapter: q.chapter,
       durationMinutes: q.durationMinutes,
       totalQuestions: q.totalQuestions,
       classSubject: {
@@ -424,7 +423,7 @@ export class TeacherService {
       data: {
         classSubjectId: dto.classSubjectId,
         title: dto.title,
-        chapter: dto.chapter,
+        chapter: dto.chapter ?? '',
         durationMinutes: dto.durationMinutes,
         totalQuestions: dto.questions.length,
         maxAttempts: dto.maxAttempts ?? 1,
@@ -465,7 +464,6 @@ export class TeacherService {
     return {
       id: quiz!.id,
       title: quiz!.title,
-      chapter: quiz!.chapter,
       durationMinutes: quiz!.durationMinutes,
       totalQuestions: quiz!.totalQuestions,
       classSubject: {
@@ -546,30 +544,22 @@ export class TeacherService {
   async getStudentProgress(userId: string, classSubjectId: string, studentId: string) {
     const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
 
-    const [assignments, quizzes, chapters] = await Promise.all([
+    const [assignments, quizzes] = await Promise.all([
       this.prisma.assignment.findMany({ where: { classSubjectId }, orderBy: { dueAt: 'asc' } }),
       this.prisma.quiz.findMany({ where: { classSubjectId }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.chapter.findMany({
-        where: { subject: { classOffers: { some: { id: classSubjectId } } } },
-        orderBy: { order: 'asc' },
-      }),
     ]);
 
     const assignmentIds = assignments.map(a => a.id);
     const quizIds = quizzes.map(q => q.id);
-    const chapterIds = chapters.map(c => c.id);
 
-    const [submissions, sessions, chapterProgress] = await Promise.all([
+    const [submissions, sessions] = await Promise.all([
       this.prisma.assignmentSubmission.findMany({ where: { assignmentId: { in: assignmentIds }, studentId } }),
       this.prisma.quizSession.findMany({ where: { quizId: { in: quizIds }, studentId, submittedAt: { not: null } }, orderBy: { score: 'desc' } }),
-      this.prisma.chapterProgress.findMany({ where: { studentId, chapterId: { in: chapterIds } } }),
     ]);
 
     const subMap = new Map(submissions.map(s => [s.assignmentId, s]));
     const sessionMap = new Map<string, typeof sessions[0]>();
     sessions.forEach(s => { if (!sessionMap.has(s.quizId)) sessionMap.set(s.quizId, s); });
-
-    const progressMap = new Map(chapterProgress.map(p => [p.chapterId, p]));
 
     return {
       assignments: assignments.map(a => {
@@ -579,10 +569,6 @@ export class TeacherService {
       quizzes: quizzes.map(q => {
         const session = sessionMap.get(q.id);
         return { id: q.id, title: q.title, attempted: !!session, bestScore: session?.score ?? null, bestStars: session?.stars ?? null };
-      }),
-      chapters: chapters.map(c => {
-        const prog = progressMap.get(c.id);
-        return { id: c.id, order: c.order, title: c.title, completed: prog?.completed ?? false };
       }),
     };
   }
@@ -646,19 +632,87 @@ export class TeacherService {
 
   async getMateri(userId: string, classSubjectId: string) {
     const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
-    return this.prisma.materiItem.findMany({
+    const items = await this.prisma.materiItem.findMany({
       where: { subjectId: cs.subjectId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, type: true, content: true, fileName: true, createdAt: true },
+      include: { _count: { select: { attachments: true } } },
     });
+    return items.map(item => ({
+      id: item.id,
+      title: item.title,
+      excerpt: item.body.replace(/<[^>]*>/g, '').trim().slice(0, 150),
+      attachmentCount: item._count.attachments,
+      createdAt: item.createdAt,
+    }));
   }
 
-  async createMateri(userId: string, classSubjectId: string, dto: { type: MateriType; content: string; fileName?: string }) {
+  async getMateriDetail(userId: string, classSubjectId: string, materiId: string) {
     const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
-    return this.prisma.materiItem.create({
-      data: { subjectId: cs.subjectId, type: dto.type, content: dto.content, fileName: dto.fileName },
-      select: { id: true, type: true, content: true, fileName: true, createdAt: true },
+    const item = await this.prisma.materiItem.findUnique({
+      where: { id: materiId },
+      include: {
+        attachments: {
+          orderBy: { order: 'asc' },
+          select: { id: true, type: true, content: true, fileName: true },
+        },
+      },
     });
+    if (!item || item.subjectId !== cs.subjectId) {
+      throw new NotFoundException({ code: 'MATERI_NOT_FOUND', message: 'Materi tidak ditemukan' });
+    }
+    return { id: item.id, title: item.title, body: item.body, attachments: item.attachments, createdAt: item.createdAt };
+  }
+
+  async createMateri(
+    userId: string,
+    classSubjectId: string,
+    dto: { title: string; body: string; attachments?: { type: MateriType; content: string; fileName: string }[] },
+  ) {
+    const cs = await this.assertOwnsClassSubject(userId, classSubjectId);
+    const attachments = dto.attachments ?? [];
+
+    if (attachments.length > 5) {
+      throw new BadRequestException({ code: 'TOO_MANY_ATTACHMENTS', message: 'Maksimal 5 lampiran' });
+    }
+
+    for (const att of attachments) {
+      const match = att.content.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9\-.+]+);base64,(.+)$/);
+      if (!match) throw new BadRequestException({ code: 'INVALID_BASE64', message: 'Format file tidak valid' });
+
+      const mimeType = match[1];
+      const allowedMimes = att.type === MateriType.IMAGE
+        ? ['image/jpeg', 'image/png', 'image/webp']
+        : ['application/pdf'];
+      if (!allowedMimes.includes(mimeType)) {
+        throw new BadRequestException({ code: 'INVALID_FILE_TYPE', message: 'Tipe file tidak didukung' });
+      }
+
+      const decodedSize = Buffer.byteLength(match[2], 'base64');
+      if (decodedSize > 3 * 1024 * 1024) {
+        throw new BadRequestException({ code: 'FILE_TOO_LARGE', message: 'Ukuran file maksimal 3MB' });
+      }
+    }
+
+    const item = await this.prisma.materiItem.create({
+      data: {
+        subjectId: cs.subjectId,
+        title: dto.title,
+        body: dto.body,
+        attachments: {
+          create: attachments.map((att, i) => ({
+            type: att.type,
+            content: att.content,
+            fileName: att.fileName,
+            order: i,
+          })),
+        },
+      },
+      include: {
+        attachments: { orderBy: { order: 'asc' }, select: { id: true, type: true, fileName: true } },
+      },
+    });
+
+    return { id: item.id, title: item.title, body: item.body, attachments: item.attachments, createdAt: item.createdAt };
   }
 
   async deleteMateri(userId: string, classSubjectId: string, materiId: string) {
@@ -1082,7 +1136,6 @@ export class TeacherService {
     userId: string,
     classSubjectId: string,
     academicYearId: string,
-    semester: number,
   ) {
     const teacher = await this.getTeacher(userId);
     const cs = await this.assertOwnsClassSubject(teacher.userId, classSubjectId);
@@ -1095,7 +1148,7 @@ export class TeacherService {
     const [{ students, refs }, saved] = await Promise.all([
       this.computeReferences(classSubjectId, cs.classId),
       this.prisma.finalGrade.findMany({
-        where: { classSubjectId, academicYearId, semester },
+        where: { classSubjectId, academicYearId },
       }),
     ]);
 
@@ -1105,7 +1158,6 @@ export class TeacherService {
       classSubjectId,
       academicYearId,
       academicYearLabel: ay.label,
-      semester,
       entries: students.map((s) => {
         const ref = refs.get(s.userId)!;
         const fg = savedMap.get(s.userId);
@@ -1148,18 +1200,16 @@ export class TeacherService {
         const hasGrade = e.finalGrade !== null && e.finalGrade !== undefined;
         return this.prisma.finalGrade.upsert({
           where: {
-            classSubjectId_studentId_academicYearId_semester: {
+            classSubjectId_studentId_academicYearId: {
               classSubjectId,
               studentId: e.studentId,
               academicYearId: dto.academicYearId,
-              semester: dto.semester,
             },
           },
           create: {
             classSubjectId,
             studentId: e.studentId,
             academicYearId: dto.academicYearId,
-            semester: dto.semester,
             refAssignment: ref.refAssignment,
             refQuiz: ref.refQuiz,
             refExam: ref.refExam,

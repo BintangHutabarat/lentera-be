@@ -44,8 +44,9 @@ export class CreateQuizDto {
   @IsString()
   title: string;
 
+  @IsOptional()
   @IsString()
-  chapter: string;
+  chapter?: string;
 
   @IsInt()
   @Min(1)

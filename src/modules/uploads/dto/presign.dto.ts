@@ -2,7 +2,7 @@ import { IsIn, IsNumber, IsString, Min } from 'class-validator';
 
 export class PresignDto {
   @IsString()
-  @IsIn(['assignment_submission', 'avatar', 'chapter_content', 'materi'])
+  @IsIn(['assignment_submission', 'avatar'])
   purpose: string;
 
   @IsString()

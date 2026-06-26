@@ -42,7 +42,6 @@ enum SubjectColor {
 enum MateriType {
   IMAGE
   PDF
-  TEXT
 }
 
 enum AssignmentType {
@@ -80,17 +79,19 @@ model School {
 }
 
 model Class {
-  id        String @id @default(cuid())
-  schoolId  String
-  school    School @relation(fields: [schoolId], references: [id])
-  name      String
-  gradeYear Int
+  id             String       @id @default(cuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id])
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  name           String
+  gradeYear      Int
 
   students      Student[]
   classSubjects ClassSubject[]
   scheduleSlots ScheduleSlot[]
 
-  @@unique([schoolId, name])
+  @@unique([schoolId, name, academicYearId])
 }
 
 model User {
@@ -223,15 +224,28 @@ model Chapter {
 }
 
 model MateriItem {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   subjectId String
-  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  type      MateriType
-  content   String     @db.Text
-  fileName  String?
-  createdAt DateTime   @default(now())
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title     String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  attachments MateriAttachment[]
 
   @@index([subjectId, createdAt])
+}
+
+model MateriAttachment {
+  id       String     @id @default(cuid())
+  materiId String
+  materi   MateriItem @relation(fields: [materiId], references: [id], onDelete: Cascade)
+  type     MateriType
+  content  String     @db.LongText
+  fileName String
+  order    Int
+
+  @@index([materiId, order])
 }
 
 model ChapterProgress {
@@ -271,7 +285,7 @@ model Assignment {
   maxScore       Int            @default(100)
   totalItems     String?
   minWords       Int?
-  attachmentUrl  String?
+  attachmentUrl  String?        @db.Text
   attachmentName String?
   attachmentSize Int?
   rubric         Json
@@ -291,7 +305,7 @@ model AssignmentSubmission {
   studentId       String
   student         Student        @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   kind            SubmissionKind
-  fileUrl         String?
+  fileUrl         String?        @db.Text
   fileName        String?
   fileSize        Int?
   essayText       String?        @db.Text
@@ -455,6 +469,7 @@ model AcademicYear {
   label    String
   isActive Boolean @default(false)
 
+  classes     Class[]
   finalGrades FinalGrade[]
 
   @@unique([schoolId, label])
@@ -523,7 +538,6 @@ model FinalGrade {
   student        Student      @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   academicYearId String
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  semester       Int
   refAssignment  Float?
   refQuiz        Float?
   refExam        Float?
@@ -533,5 +547,5 @@ model FinalGrade {
   gradedAt       DateTime?
   gradedById     String?
 
-  @@unique([classSubjectId, studentId, academicYearId, semester])
+  @@unique([classSubjectId, studentId, academicYearId])
 }

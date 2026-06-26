@@ -338,11 +338,17 @@ export class AdminService {
 
   // ── Classes ────────────────────────────────────────────────────────────────
 
-  async getClasses(userId: string) {
+  async getClasses(userId: string, academicYearId?: string) {
     const admin = await this.getAdmin(userId);
     const classes = await this.prisma.class.findMany({
-      where: { schoolId: admin.user.schoolId },
-      include: { _count: { select: { students: true, classSubjects: true } } },
+      where: {
+        schoolId: admin.user.schoolId,
+        ...(academicYearId ? { academicYearId } : {}),
+      },
+      include: {
+        _count: { select: { students: true, classSubjects: true } },
+        academicYear: { select: { id: true, label: true } },
+      },
       orderBy: [{ gradeYear: 'asc' }, { name: 'asc' }],
     });
 
@@ -350,6 +356,7 @@ export class AdminService {
       id: c.id,
       name: c.name,
       gradeYear: c.gradeYear,
+      academicYear: { id: c.academicYear.id, label: c.academicYear.label },
       studentCount: c._count.students,
       subjectCount: c._count.classSubjects,
     }));
@@ -357,15 +364,21 @@ export class AdminService {
 
   async createClass(userId: string, dto: CreateClassDto) {
     const admin = await this.getAdmin(userId);
+
+    const ay = await this.prisma.academicYear.findUnique({ where: { id: dto.academicYearId } });
+    if (!ay || ay.schoolId !== admin.user.schoolId) {
+      throw new NotFoundException({ code: 'ACADEMIC_YEAR_NOT_FOUND', message: 'Tahun ajaran tidak ditemukan' });
+    }
+
     const existing = await this.prisma.class.findUnique({
-      where: { schoolId_name: { schoolId: admin.user.schoolId, name: dto.name } },
+      where: { schoolId_name_academicYearId: { schoolId: admin.user.schoolId, name: dto.name, academicYearId: dto.academicYearId } },
     });
-    if (existing) throw new ConflictException({ code: 'CLASS_NAME_TAKEN', message: 'Nama kelas sudah ada' });
+    if (existing) throw new ConflictException({ code: 'CLASS_NAME_TAKEN', message: 'Nama kelas sudah ada di tahun ajaran ini' });
 
     const cls = await this.prisma.class.create({
-      data: { schoolId: admin.user.schoolId, name: dto.name, gradeYear: dto.gradeYear },
+      data: { schoolId: admin.user.schoolId, name: dto.name, gradeYear: dto.gradeYear, academicYearId: dto.academicYearId },
     });
-    return { id: cls.id, name: cls.name, gradeYear: cls.gradeYear };
+    return { id: cls.id, name: cls.name, gradeYear: cls.gradeYear, academicYearId: cls.academicYearId };
   }
 
   async updateClass(userId: string, classId: string, dto: UpdateClassDto) {
@@ -401,7 +414,7 @@ export class AdminService {
     const admin = await this.getAdmin(userId);
     const subjects = await this.prisma.subject.findMany({
       where: { schoolId: admin.user.schoolId },
-      include: { _count: { select: { classOffers: true, chapters: true } } },
+      include: { _count: { select: { classOffers: true } } },
       orderBy: { name: 'asc' },
     });
 
@@ -412,7 +425,6 @@ export class AdminService {
       color: s.color.toLowerCase(),
       iconKey: s.iconKey,
       classCount: s._count.classOffers,
-      chapterCount: s._count.chapters,
     }));
   }
 
@@ -798,7 +810,6 @@ export class AdminService {
     return quizzes.map(q => ({
       id: q.id,
       title: q.title,
-      chapter: q.chapter,
       durationMinutes: q.durationMinutes,
       totalQuestions: q.totalQuestions,
       maxAttempts: q.maxAttempts,

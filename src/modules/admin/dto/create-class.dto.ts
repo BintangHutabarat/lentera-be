@@ -7,4 +7,7 @@ export class CreateClassDto {
   @IsInt()
   @Min(1)
   gradeYear: number;
+
+  @IsString()
+  academicYearId: string;
 }

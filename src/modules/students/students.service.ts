@@ -56,6 +56,30 @@ export class StudentsService {
     };
   }
 
+  async getMateri(userId: string, subjectId: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
+
+    // FE mengirim subjectId (konsisten dengan /subjects/:id). Pastikan mapel ini diajarkan di kelas siswa.
+    const cs = await this.prisma.classSubject.findFirst({
+      where: { classId: student.classId, subjectId },
+    });
+    if (!cs) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Akses ditolak' });
+
+    const items = await this.prisma.materiItem.findMany({
+      where: { subjectId: cs.subjectId },
+      orderBy: { createdAt: 'asc' },
+      include: { _count: { select: { attachments: true } } },
+    });
+    return items.map(item => ({
+      id: item.id,
+      title: item.title,
+      excerpt: item.body.replace(/<[^>]*>/g, '').trim().slice(0, 150),
+      attachmentCount: item._count.attachments,
+      createdAt: item.createdAt,
+    }));
+  }
+
   async getBadges(userId: string) {
     const student = await this.prisma.student.findUnique({ where: { userId } });
     if (!student) throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
@@ -79,13 +103,14 @@ export class StudentsService {
     await this.prisma.student.update({ where: { userId }, data: { avatar: avatarUrl } });
   }
 
-  async getAttendanceByClassSubject(userId: string, classSubjectId: string) {
+  async getAttendanceByClassSubject(userId: string, subjectId: string) {
     const student = await this.prisma.student.findUnique({ where: { userId } });
     if (!student) {
       throw new NotFoundException({ code: 'STUDENT_NOT_FOUND', message: 'Profil tidak ditemukan' });
     }
-    const cs = await this.prisma.classSubject.findUnique({
-      where: { id: classSubjectId },
+    // FE mengirim subjectId (konsisten dengan /subjects/:id). Resolusi ke class-subject kelas siswa.
+    const cs = await this.prisma.classSubject.findFirst({
+      where: { classId: student.classId, subjectId },
       include: { subject: { select: { id: true, name: true, shortName: true } } },
     });
     if (!cs) {
@@ -96,7 +121,7 @@ export class StudentsService {
     }
 
     const meetings = await this.prisma.meeting.findMany({
-      where: { classSubjectId },
+      where: { classSubjectId: cs.id },
       orderBy: { meetingNumber: 'asc' },
       include: {
         attendances: { where: { studentId: userId }, select: { status: true } },
@@ -127,7 +152,7 @@ export class StudentsService {
     });
 
     return {
-      classSubjectId,
+      classSubjectId: cs.id,
       subject: cs.subject,
       totalMeetings: cs.totalMeetings,
       summary: {

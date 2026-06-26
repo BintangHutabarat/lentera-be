@@ -11,36 +11,37 @@ export class SubjectsService {
 
     const classSubjects = await this.prisma.classSubject.findMany({
       where: { classId: student.classId },
-      include: {
-        subject: { include: { chapters: { orderBy: { order: 'asc' } } } },
-        teacher: true,
-      },
+      include: { subject: true, teacher: true },
     });
 
-    return Promise.all(
-      classSubjects.map(async cs => {
-        const total = cs.subject.chapters.length;
-        const progressRows = await this.prisma.chapterProgress.findMany({
-          where: { studentId: userId, chapterId: { in: cs.subject.chapters.map(c => c.id) }, completed: true },
-        });
-        const done = progressRows.length;
-        const currentChapter = cs.subject.chapters.find(
-          ch => !progressRows.some(p => p.chapterId === ch.id),
-        );
+    const csIds = classSubjects.map(cs => cs.id);
 
-        return {
-          id: cs.subject.id,
-          name: cs.subject.name,
-          color: cs.subject.color.toLowerCase(),
-          icon: cs.subject.iconKey,
-          teacher: { id: cs.teacherId, name: cs.teacher.name, title: cs.teacher.title },
-          chaptersTotal: total,
-          chaptersDone: done,
-          progress: total ? Math.round((done / total) * 100) : 0,
-          currentChapter: currentChapter?.title ?? null,
-        };
+    const [assignments, submissions] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: { classSubjectId: { in: csIds } },
+        select: { id: true, classSubjectId: true },
       }),
-    );
+      this.prisma.assignmentSubmission.findMany({
+        where: { studentId: userId, assignment: { classSubjectId: { in: csIds } } },
+        select: { assignmentId: true },
+      }),
+    ]);
+
+    const submittedIds = new Set(submissions.map(s => s.assignmentId));
+
+    return classSubjects.map(cs => {
+      const csAssignments = assignments.filter(a => a.classSubjectId === cs.id);
+      const total = csAssignments.length;
+      const done = csAssignments.filter(a => submittedIds.has(a.id)).length;
+      return {
+        id: cs.subject.id,
+        name: cs.subject.name,
+        color: cs.subject.color.toLowerCase(),
+        icon: cs.subject.iconKey,
+        teacher: { id: cs.teacherId, name: cs.teacher.name, title: cs.teacher.title },
+        progress: total ? Math.round((done / total) * 100) : 0,
+      };
+    });
   }
 
   async getSubjectDetail(userId: string, subjectId: string) {
@@ -49,19 +50,12 @@ export class SubjectsService {
 
     const classSubject = await this.prisma.classSubject.findFirst({
       where: { classId: student.classId, subjectId },
-      include: {
-        subject: { include: { chapters: { orderBy: { order: 'asc' } } } },
-        teacher: true,
-      },
+      include: { subject: true, teacher: true },
     });
 
     if (!classSubject) {
       throw new ForbiddenException({ code: 'SUBJECT_NOT_ACCESSIBLE', message: 'Mapel tidak tersedia untuk kelas Anda' });
     }
-
-    const progressRows = await this.prisma.chapterProgress.findMany({
-      where: { studentId: userId, chapterId: { in: classSubject.subject.chapters.map(c => c.id) } },
-    });
 
     return {
       id: classSubject.subject.id,
@@ -69,16 +63,6 @@ export class SubjectsService {
       color: classSubject.subject.color.toLowerCase(),
       icon: classSubject.subject.iconKey,
       teacher: { id: classSubject.teacherId, name: classSubject.teacher.name },
-      chapters: classSubject.subject.chapters.map(ch => {
-        const prog = progressRows.find(p => p.chapterId === ch.id);
-        return {
-          id: ch.id,
-          order: ch.order,
-          title: ch.title,
-          completed: prog?.completed ?? false,
-          completedAt: prog?.completedAt ?? null,
-        };
-      }),
     };
   }
 
